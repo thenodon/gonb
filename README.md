@@ -1,3 +1,6 @@
+[![Python application](https://github.com/thenodon/gonb/actions/workflows/python-app.yml/badge.svg)](https://github.com/thenodon/gonb/actions/workflows/python-app.yml)
+[![PyPI version](https://badge.fury.io/py/gonb.svg)](https://badge.fury.io/py/gonb)
+
 gonb - A Grafana onboarding tool
 ---------------------------------
 # Overview
