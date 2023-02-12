@@ -1,0 +1,37 @@
+[
+  {
+    "organisation": "foo",
+    "users": [
+      {
+        "firstName": "Eric",
+        "lastName": "Foo",
+        "email": "eric.foo@foo.com",
+        "role": "Editor",
+        "password": "xyz123"
+      },
+      {
+        "firstName": "Benny",
+        "lastName": "Foo",
+        "email": "benny.foo@foo.com",
+        "role": "Viewer"
+      }
+    ]
+  },
+  {
+    "organisation": "bar",
+    "users": [
+      {
+        "firstName": "Andy",
+        "lastName": "Bar",
+        "email": "andy.bar@bar.com",
+        "role": "Editor"
+      },
+      {
+        "firstName": "John",
+        "lastName": "Bar",
+        "email": "john.bar@bar.com",
+        "role": "Viewer"
+      }
+    ]
+  }
+]
