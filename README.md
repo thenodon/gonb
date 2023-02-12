@@ -85,7 +85,7 @@ python3 -m venv venv
 pip install -r requirements.txt
 
 export GONB_GRAFANA_PASSWORD=xyz
-export GONB_GRAFANA_URL=http://localhost:300+
+export GONB_GRAFANA_URL=http://localhost:3000
 export GONB_GRAFANA_USER=admin
 export GONB_JSON_FILE=json_file_example/users.json;
 
