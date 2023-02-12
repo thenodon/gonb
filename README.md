@@ -60,7 +60,9 @@ A provider must implement the class `gonb.provider.Provider` and implement the f
 ```
 If not implemented a `NotImplementedError` will be raised.
 
-Please see examples.
+Please see examples in the directory `json_gonb_provider` and `okta_gonb_provider`.
+
+> Both these example providers are part of gonb pip package https://pypi.org/project/gonb.
 
 # Running gonb
 There are two ways you can use gonb. The first is to use it as package and build a provider. 
