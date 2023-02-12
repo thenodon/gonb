@@ -2,6 +2,9 @@ from os.path import dirname, join
 
 from setuptools import setup, find_packages
 
+from pathlib import Path
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
 
 def read(fname):
     return open(join(dirname(__file__), fname)).read()
@@ -9,6 +12,8 @@ def read(fname):
 
 setup(
     name='gonb',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     setuptools_git_versioning={
         "template": "{tag}",
         "dev_template": "{tag}.dev{ccount}",
