@@ -100,5 +100,3 @@ Grafana 9 - tested on 9.3.6
 
 # Future
 - Add additional mapping for teams
-- Add support for password
-
