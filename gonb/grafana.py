@@ -20,8 +20,7 @@ from typing import Dict, Set, List, Any
 
 import requests
 
-from gonb.diff_users import DiffUsers
-from gonb.organization import Organization
+from gonb.organization import Organization, DiffUsers
 from gonb.user import User
 
 requests.packages.urllib3.disable_warnings()

@@ -1,8 +1,8 @@
 import unittest
 from typing import Dict
 
-from gonb.diff_users import DiffUsers
-from gonb.organization import Organization
+#from gonb.diff_users import DiffUsers
+from gonb.organization import Organization, DiffUsers
 from gonb.user import User
 
 
