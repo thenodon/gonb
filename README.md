@@ -79,8 +79,10 @@ The second option enable building different providers as packages and use, e.g. 
 The json file provider is just for testing. 
 
 ```shell
-python3 -m venv gnob_venv
-pip install gnob
+git clone git@github.com:thenodon/gonb.git
+python3 -m venv venv
+. venv/bin/activate
+pip install -r requirements.txt
 
 export GONB_GRAFANA_PASSWORD=xyz
 export GONB_GRAFANA_URL=http://localhost:300+
@@ -88,7 +90,9 @@ export GONB_GRAFANA_USER=admin
 export GONB_JSON_FILE=json_file_example/users.json;
 
 # Set to true if organisations should be created if not existing
-exportt GONB_GRAFANA_CREATE_ORGS=true
+export GONB_GRAFANA_CREATE_ORGS=true
+
+cp json_file_example/users_add.json json_file_example/users.json
 python -m json_gonb_provider
 
 # check your Grafana for results
