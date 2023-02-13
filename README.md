@@ -4,12 +4,12 @@
 gonb - A Grafana onboarding tool
 ---------------------------------
 # Overview
-Gnob enable continues provisioning and configuration of Grafana users to manage users lifecycle based on an IAM source 
+Gonb enable continues provisioning and configuration of Grafana users to manage users lifecycle based on an IAM source 
 system.
 
-Users should authenticate using some SSO provider, but gnob us the same SSO IAM system to configure users into different
+Users should authenticate using some SSO provider, but gonb us the same SSO IAM system to configure users into different
 Grafana organizations. 
-Gnob should be run using some scheduling tool to keep user in sync with the users definition in the IAM source.
+Gonb should be run using some scheduling tool to keep user in sync with the users definition in the IAM source.
 
 A typical pattern is to map users in an IAM group to a corresponding organisation.
 
@@ -34,7 +34,7 @@ related to a SSO provider, since the authentication to Grafana is done by the SS
 - Create organisation if they do not exists in Grafana, default false.
 
 # Argument passing
-The only way to pass arguments to gnob is by environment variables. Each provider must define their own and 
+The only way to pass arguments to gonb is by environment variables. Each provider must define their own and 
 required environment variables and they must be exposed by the interface method:
 
 ```python
