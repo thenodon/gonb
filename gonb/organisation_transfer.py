@@ -36,9 +36,9 @@ class TeamDTO:
         self.avatar_url: str = ''
         # member list of user login_name's
         self.members: List[str] = []
-        # Enterprise options
-        self.access_control: List[str] = []
-        self.sync_groups_id: List[str] = []
+        # Todo Enterprise options
+        # self.access_control: List[str] = []
+        # self.sync_groups_id: List[str] = []
 
 
 class OrganizationDTO:
