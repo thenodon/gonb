@@ -1,6 +1,14 @@
 [
   {
     "organisation": "foo",
+    "teams": [
+      {
+        "team": "foo-team",
+        "members": [
+          {"name": "eric.foo@foo.com"}
+        ]
+      }
+    ],
     "users": [
       {
         "firstName": "Eric",
@@ -33,5 +41,8 @@
         "role": "Viewer"
       }
     ]
+  },
+  {
+    "organisation": "empty"
   }
 ]

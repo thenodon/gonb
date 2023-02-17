@@ -4,34 +4,34 @@
 gonb - A Grafana onboarding tool
 ---------------------------------
 # Overview
-Gonb enable continues provisioning and configuration of Grafana users to manage users lifecycle based on an IAM source 
-system.
+Gonb enable continues provisioning and configuration of Grafana based on an IAM source system.
+This includes the lifecycle of organisations, users and teams.   
 
 Users should authenticate using some SSO provider, but gonb us the same SSO IAM system to configure users into different
-Grafana organizations. 
+Grafana organizations and teams. 
 Gonb should be run using some scheduling tool to keep user in sync with the users definition in the IAM source.
 
-A typical pattern is to map users in an IAM group to a corresponding organisation.
+A typical patterns supported are:
+- Map users in an IAM group to a corresponding organisation.
+- Map users in an IAM group into a organisation and team
 
-The user model in the IAM system must be mapped to the Grafana User model. The model include the 
-following attributes:
+In the later use case gonb also provide the creation of folders that are specific to a team. This support the 
+model where different teams have their own folder to create dashboards and alerts separated from other teams.
 
-- name - A "real" name of the user, e.g. first and last name
-- email - users email
-- login - the "username" - must be the same as the username for the SSO
-- role - Can be Viewer, Editor or Admin, default Viewer
-- password - The password can only be set when a user is added and should only be used for providers that are not
-related to a SSO provider, since the authentication to Grafana is done by the SSO provider. 
-
-> The password is default set to a 30 character random string of a mix of characters, numbers and special characters.
+The user model in the IAM system must be mapped to the Grafana model. The model include the objects for 
+organisation, team and user where teams and users are linked to an organisation.
 
 
 # Features
 - Integration with different IAM solution using a provider pattern.
+- Multiple providers could operate against same Grafana instance, but should not operate on the same organisation.
 - A user can belong to multiple organisations.
 - Automatic add and remove of user from organisation(s) based on the lifecycle in the IAM.
-- Update user in Grafana if any attributes in the user's IAM "object" is changed, e.g. the role, email.
-- Create organisation if they do not exists in Grafana, default false.
+- Update users in Grafana if any attributes in the user's IAM "object" is changed, e.g. the role, email.
+- Create organisation if they do not exist in Grafana, default false.
+- Automatic creation of team folder, folder with same name as team, if teams are created. Default folder permission
+for team is Editor. 
+- Team member lifecycle in the same way as for users in organisation
 
 # Argument passing
 The only way to pass arguments to gonb is by environment variables. Each provider must define their own and 
@@ -52,7 +52,7 @@ For the grafana integration the following 3 must exist and have valid values:
 # Develop a provider
 A provider must implement the class `gonb.provider.Provider` and implement the following methods:
 ```python
-    def get_users(self) -> Dict[str, Organization]:
+    def get_organisations(self) -> Dict[str, OrganizationDTO]:
     
 
     def mandatory_env_vars(self) -> Dict[str, str]:
@@ -60,7 +60,7 @@ A provider must implement the class `gonb.provider.Provider` and implement the f
 ```
 If not implemented a `NotImplementedError` will be raised.
 
-Please see examples in the directory `json_gonb_provider` and `okta_gonb_provider`.
+Please see examples in the directory `json_gonb_provider`, `json_team_gonb_provider` and `okta_gonb_provider`.
 
 > Both these example providers are part of gonb pip package https://pypi.org/project/gonb.
 
@@ -101,8 +101,14 @@ python -m json_gonb_provider
 ```
 # System requirements
 
-Python 3.8
-Grafana 9 - tested on 9.3.6
+- Python 3.8
+- Grafana 9 - tested on 9.3.6
+
+# Important notes
+- Password can be set by the provider, but should typical not since SSO would typical be used. 
+The default is to set the password to a 30 character random string of a mix of characters, 
+numbers and special characters.
+
 
 # Future
-- Add additional mapping for teams
+- Support for Grafana Enterprise options for RBAC and team sync groups

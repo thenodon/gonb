@@ -13,14 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from gonb.grafana import provision
-from gonb.provider import ProviderInit
+class GrafanaException(Exception):
+    def __init__(self, message, status: int = 500):
+        super().__init__(message)
+        self._status = status
 
-
-if __name__ == "__main__":
-
-    # Instantiate the Provider and get organisations and users
-    iam_organisations = ProviderInit().register_provider().get_organisations()
-    # Manage organisation and user in Grafana
-    provision(iam_organisations)
-
+    def status(self) -> int:
+        return self._status

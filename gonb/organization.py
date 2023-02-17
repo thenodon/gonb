@@ -14,9 +14,10 @@
 # limitations under the License.
 
 import json
-from typing import Dict, Set
+from typing import Dict, Set, List
 
 from gonb.user import User
+from gonb.team import Team
 
 
 class Organization:
@@ -25,10 +26,12 @@ class Organization:
         self.org_id: int = org_id
         self.api_key: str = ''
         self.users: Dict[str, User] = {}
+        self.teams: Dict[str, Team] = {}
 
     def __str__(self):
         return json.dumps(
             {key: value for key, value in self.__dict__.items() if not key.startswith('__') and not callable(key)})
+
 
 
 class DiffUsers:
