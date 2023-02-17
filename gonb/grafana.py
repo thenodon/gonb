@@ -20,7 +20,6 @@ from typing import Dict, Set, List, Any
 
 import requests
 
-
 from gonb.exceptions import GrafanaException
 from gonb.folder import Folder, folder_factory, permission_factory, PermissionTeam
 from gonb.organisation_transfer import OrganizationDTO
@@ -453,15 +452,16 @@ class GrafanaUser(GrafanaConnection):
 
         self._init_organizations()
 
-    def provision_organizations_users(self, iam_org: Dict[str, Organization]) -> Dict[str, Dict[str, List[User]]]:
+    def provision_organizations_users(self, iam_organisations: Dict[str, Organization]) \
+            -> Dict[str, Dict[str, List[User]]]:
         """
         Add/delete users in the Grafana organisations based on the content in source
         data
-        :param iam_org:
+        :param iam_organisations:
         :return:
         """
 
-        diff_users = DiffUsers(iam_org, self.organisations_by_organisation_name)
+        diff_users = DiffUsers(iam_organisations, self.organisations_by_organisation_name)
 
         added_organisations = self._add_organisations(diff_users.add_organisations())
         for organisation in added_organisations:
@@ -470,18 +470,18 @@ class GrafanaUser(GrafanaConnection):
         # for organisation_name in set(source_users_idx.keys()).union(set(self.customer_users_idx.keys())):
         # Only manage users that is part of we got from the source
         users_managed = {}
-        for organisation_name in set(iam_org.keys()):
+        for organisation_name in set(iam_organisations.keys()):
             users_managed[organisation_name] = {}
             users_managed[organisation_name][UPDATED] = \
-                self._update_users(organisation_name, diff_users.update(organisation_name), iam_org)
+                self._update_users(organisation_name, diff_users.update(organisation_name), iam_organisations)
             users_managed[organisation_name][REMOVED] = \
                 self._remove_users(organisation_name, diff_users.delete(organisation_name))
             users_managed[organisation_name][ADDED] = \
-                self._add_users(organisation_name, diff_users.add(organisation_name), iam_org)
+                self._add_users(organisation_name, diff_users.add(organisation_name), iam_organisations)
 
         for org, action in users_managed.items():
-            log.info("operations", extra={'organisation': org, UPDATED: len(action[UPDATED]),
-                                          ADDED: len(action[ADDED]), REMOVED: len(action[REMOVED])})
+            log.info("user operations", extra={'organisation': org, UPDATED: len(action[UPDATED]),
+                                               ADDED: len(action[ADDED]), REMOVED: len(action[REMOVED])})
         return users_managed
 
     def _add_organisations(self, organisations: Set[str]) -> List[Organization]:
@@ -496,15 +496,15 @@ class GrafanaUser(GrafanaConnection):
 
         return added
 
-    def _update_users(self, organisation_name: str, user_names: Set[str], iam_orgs: Dict[str, Organization]) \
+    def _update_users(self, organisation_name: str, user_names: Set[str], iam_organisations: Dict[str, Organization]) \
             -> List[User]:
 
         update_users = []
         for user_name in user_names:
 
-            if user_name in iam_orgs[organisation_name].users:
+            if user_name in iam_organisations[organisation_name].users:
                 org = self.organisations_by_organisation_name[organisation_name]
-                user = iam_orgs[organisation_name].users[user_name]
+                user = iam_organisations[organisation_name].users[user_name]
                 user.user_id = self.organisations_by_organisation_name[organisation_name].users[user_name].user_id
                 self._update_user_to_organisation(user, org.org_id)
                 update_users.append(org.users[user_name])
@@ -531,7 +531,8 @@ class GrafanaUser(GrafanaConnection):
                 log.info('user removed', extra={'organisation': organisation_name, 'user': user_name})
         return removed_users
 
-    def _add_users(self, organisation_name: str, user_names: Set[str], iam_orgs: Dict[str, Organization]) -> List[User]:
+    def _add_users(self, organisation_name: str, user_names: Set[str], iam_organisations: Dict[str, Organization]) -> \
+    List[User]:
         """
         Add users to an organisation
         :param organisation_name:
@@ -546,8 +547,8 @@ class GrafanaUser(GrafanaConnection):
         org = self.organisations_by_organisation_name[organisation_name]
         for user_name in user_names:
             if user_name not in org.users:
-                self._add_user_to_organisation(iam_orgs[organisation_name].users[user_name], org.org_id)
-                added_users.append(iam_orgs[organisation_name].users[user_name])
+                self._add_user_to_organisation(iam_organisations[organisation_name].users[user_name], org.org_id)
+                added_users.append(iam_organisations[organisation_name].users[user_name])
                 log.info('user add', extra={'organisation': organisation_name, 'user': user_name})
 
         return added_users
@@ -559,12 +560,12 @@ class GrafanaTeam(GrafanaConnection):
         # self.organisations_by_organisation_name: Dict[str, Organization] = \
         self._init_organizations()
 
-    def provision_organisation_teams(self, iam_org: Dict[str, Organization]) -> Dict[str, Dict[str, List[User]]]:
+    def provision_organisation_teams(self, iam_organisations: Dict[str, Organization]):
         """
         Provision and manage teams include the following logic:
         - Every Team will have a Folder with the same name
         - The Team Folder will always give Team members Editor rights by default
-        :param iam_org:
+        :param iam_organisations:
         :return:
         """
 
@@ -577,7 +578,7 @@ class GrafanaTeam(GrafanaConnection):
             self._get_all_teams(organisation, folders_by_organisation_name[organisation_name])
 
         # Add or update team
-        for organisation_name, organisation in iam_org.items():
+        for organisation_name, organisation in iam_organisations.items():
             try:
                 for team_name, team in organisation.teams.items():
                     team.org_id = self.organisations_by_organisation_name[organisation_name].org_id
@@ -594,7 +595,7 @@ class GrafanaTeam(GrafanaConnection):
                                                                                'error': str(err)})
                 continue
 
-    def _create_team(self, organisation: Organization, team: Team) -> str:
+    def _create_team(self, organisation: Organization, team: Team):
         team = self._add_team_and_members(organisation, team)
 
         if self._is_enterprise():
@@ -602,8 +603,6 @@ class GrafanaTeam(GrafanaConnection):
             self._add_team_sync_groups(organisation, team)
 
         self._add_team_folder(organisation, team)
-
-        # return status
 
     def _add_team_sync_groups(self, organisation, team):
         if team.sync_groups_id:
@@ -830,16 +829,29 @@ class GrafanaTeam(GrafanaConnection):
         return parsed_list
 
 
-def provision(iam_org: Dict[str, OrganizationDTO]):
+def provision(iam_organisations: Dict[str, OrganizationDTO]):
     """
-    The fi
-    :param iam_org:
+    Execute on the source IAM based organisation
+    :param iam_organisations:
+    :return:
+    """
+    organisations = _dto_to_organisations(iam_organisations)
+
+    GrafanaUser().provision_organizations_users(organisations)
+    GrafanaTeam().provision_organisation_teams(organisations)
+
+
+def _dto_to_organisations(iam_organisations):
+    """
+    Translate DTO organisation to organisation
+    :param iam_organisations:
     :return:
     """
     organisations: Dict[str, Organization] = {}
-    for name, organisation_dto in iam_org.items():
+    for name, organisation_dto in iam_organisations.items():
         organisation = Organization(organisation_name=organisation_dto.name, org_id=None)
         organisations[name] = organisation
+
         for user_name, user_dto in organisation_dto.users.items():
             user = User(login_name=user_dto.login, password=user_dto.password)
             user.role = user_dto.role
@@ -856,5 +868,4 @@ def provision(iam_org: Dict[str, OrganizationDTO]):
             team.members = team_dto.members
             organisation.teams[team.name] = team
 
-    GrafanaUser().provision_organizations_users(organisations)
-    GrafanaTeam().provision_organisation_teams(organisations)
+    return organisations
