@@ -135,7 +135,7 @@ class Okta(Provider):
         all_groups = self._filtered_groups()
 
         orgs: Dict[str, OrganizationDTO] = {}
-        users: Dict[str, Dict[str, User]] = {}
+        users: Dict[str, Dict[str, UserDTO]] = {}
         for okta_group in all_groups.values():
 
             all_users = self._fetch_users_by_group_id(group_id=okta_group.id)
