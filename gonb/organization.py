@@ -33,6 +33,7 @@ class Organization:
             {key: value for key, value in self.__dict__.items() if not key.startswith('__') and not callable(key)})
 
 
+
 class DiffUsers:
     def __init__(self, iam_orgs: Dict[str, Organization], grafana_orgs: Dict[str, Organization]):
         self._iam_orgs = iam_orgs

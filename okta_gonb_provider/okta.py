@@ -16,13 +16,13 @@
 import logging as log
 import os
 import re
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 import requests
 
-from gonb.grafana import Organization, GrafanaUser
+from gonb.organisation_transfer import OrganizationDTO, UserDTO
+from gonb.grafana import provision
 from gonb.provider import Provider, ProviderException
-from gonb.user import User
 
 requests.packages.urllib3.disable_warnings()
 
@@ -115,7 +115,7 @@ class Okta(Provider):
         all_users = self._fetch_users_by_group_id(group_id=group_id)
 
         # if all_users:
-        users: Dict[str, User] = {}
+        users: Dict[str, UserDTO] = {}
         for okta_user in all_users:
             user = factory(okta_user_profile=okta_user['profile'])
             users[user.login] = user
@@ -125,7 +125,7 @@ class Okta(Provider):
     def mandatory_env_vars(self) -> Dict[str, str]:
         return env_vars
 
-    def get_users(self) -> Dict[str, Organization]:
+    def get_organisations(self) -> Dict[str, OrganizationDTO]:
         """
         Get all users in the group
         :return:
@@ -134,7 +134,7 @@ class Okta(Provider):
         # Get all groups
         all_groups = self._filtered_groups()
 
-        orgs: Dict[str, Organization] = {}
+        orgs: Dict[str, OrganizationDTO] = {}
         users: Dict[str, Dict[str, User]] = {}
         for okta_group in all_groups.values():
 
@@ -142,9 +142,10 @@ class Okta(Provider):
 
             # if all_users:
             users[okta_group.group] = {}
-            org = Organization(organisation_name=okta_group.group, org_id=None)
+            org = OrganizationDTO(name=okta_group.group)
             orgs[okta_group.group] = org
             for okta_user in all_users:
+                print(okta_user['profile'])
                 user = Okta.user_factory(okta_user_profile=okta_user['profile'])
                 org.users[user.login] = user
                 log.info("okta user", extra={'group': okta_group.group, 'user': user.login})
@@ -154,8 +155,8 @@ class Okta(Provider):
         return orgs
 
     @staticmethod
-    def user_factory(okta_user_profile: Dict[str, str]) -> User:
-        user = User(okta_user_profile['login'])
+    def user_factory(okta_user_profile: Dict[str, Any]) -> UserDTO:
+        user = UserDTO(login_name=okta_user_profile['login'])
         user.name = f"{okta_user_profile['firstName']} {okta_user_profile['lastName']}"
         user.email = okta_user_profile['email']
         return user
@@ -163,6 +164,7 @@ class Okta(Provider):
 
 def execute():
     # Get organisations and users from json file
-    organisations = Okta().get_users()
+    organisations = Okta().get_organisations()
     # Manage organisation and user in Grafana
-    GrafanaUser().provision_organizations_users(organisations)
+
+    provision(organisations)

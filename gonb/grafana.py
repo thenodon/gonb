@@ -23,6 +23,7 @@ import requests
 
 from gonb.exceptions import GrafanaException
 from gonb.folder import Folder, folder_factory, permission_factory, PermissionTeam
+from gonb.organisation_transfer import OrganizationDTO
 from gonb.organization import Organization, DiffUsers
 from gonb.team import Team, team_factory, AccessControl, access_control_factory
 from gonb.user import User
@@ -777,7 +778,7 @@ class GrafanaTeam(GrafanaConnection):
         :return:
         """
         teams_data = self._get_by_api_key(f"api/teams/search", api_key=organisation.api_key)
-        if not teams_data['teams']:
+        if 'teams' not in teams_data:
             return
         for team_data in teams_data['teams']:
             # TODO add enterprise stuff
@@ -827,3 +828,33 @@ class GrafanaTeam(GrafanaConnection):
             if key in entry:
                 parsed_list.append(entry[key])
         return parsed_list
+
+
+def provision(iam_org: Dict[str, OrganizationDTO]):
+    """
+    The fi
+    :param iam_org:
+    :return:
+    """
+    organisations: Dict[str, Organization] = {}
+    for name, organisation_dto in iam_org.items():
+        organisation = Organization(organisation_name=organisation_dto.name, org_id=None)
+        organisations[name] = organisation
+        for user_name, user_dto in organisation_dto.users.items():
+            user = User(login_name=user_dto.login, password=user_dto.password)
+            user.role = user_dto.role
+            user.email = user_dto.email
+            user.name = user_dto.name
+            user.grafana_admin = user.grafana_admin
+            organisation.users[user.login] = user
+
+        for team_name, team_dto in organisation_dto.teams.items():
+            team = Team()
+            team.name = team_dto.name
+            team.email = team_dto.email
+            team.avatar_url = team_dto.avatar_url
+            team.members = team_dto.members
+            organisation.teams[team.name] = team
+
+    GrafanaUser().provision_organizations_users(organisations)
+    GrafanaTeam().provision_organisation_teams(organisations)

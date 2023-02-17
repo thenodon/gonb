@@ -1,3 +1,6 @@
-requests
+requests~=2.28.2
 urllib3
-logfmter
+logfmter~=0.0.6
+
+packaging~=23.0
+setuptools~=58.2.0

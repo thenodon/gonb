@@ -13,14 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from gonb.grafana import provision
-from gonb.provider import ProviderInit
-
-
+from json_team_dto_gonb_provider.json_file import execute
 if __name__ == "__main__":
-
-    # Instantiate the Provider and get organisations and users
-    orgs = ProviderInit().register_provider().get_organisations()
-    # Manage organisation and user in Grafana
-    provision(orgs)
-
+    execute()
+    

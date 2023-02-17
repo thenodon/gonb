@@ -30,11 +30,11 @@ class Provider:
     @classmethod
     def __subclasshook__(cls, subclass):
         return (hasattr(subclass, 'get_groups') and
-                callable(subclass.get_users) and
+                callable(subclass.get_organisations) and
                 hasattr(subclass, 'mandatory_env_vars') and
                 callable(subclass.mandatory_env_vars))
 
-    def get_users(self) -> Dict[str, Organization]:
+    def get_organisations(self) -> Dict[str, Organization]:
         raise NotImplementedError
 
     def mandatory_env_vars(self) -> Dict[str, str]:
