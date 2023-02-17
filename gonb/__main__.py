@@ -20,7 +20,7 @@ from gonb.provider import ProviderInit
 if __name__ == "__main__":
 
     # Instantiate the Provider and get organisations and users
-    orgs = ProviderInit().register_provider().get_organisations()
+    iam_organisations = ProviderInit().register_provider().get_organisations()
     # Manage organisation and user in Grafana
-    provision(orgs)
+    provision(iam_organisations)
 
