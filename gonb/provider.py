@@ -18,7 +18,7 @@ import logging as log
 import os
 from typing import Dict
 
-from gonb.grafana import Organization
+from gonb.organisation_transfer import OrganizationDTO
 
 
 class ProviderException(Exception):
@@ -34,7 +34,7 @@ class Provider:
                 hasattr(subclass, 'mandatory_env_vars') and
                 callable(subclass.mandatory_env_vars))
 
-    def get_organisations(self) -> Dict[str, Organization]:
+    def get_organisations(self) -> Dict[str, OrganizationDTO]:
         raise NotImplementedError
 
     def mandatory_env_vars(self) -> Dict[str, str]:
