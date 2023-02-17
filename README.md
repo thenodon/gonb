@@ -16,26 +16,15 @@ A typical patterns supported are:
 - Map users in an IAM group into a organisation and team
 
 In the later use case gonb also provide the creation of folders that are specific to a team. This support the 
-model where different teams have their own folder to create dashbords and alerts separated from other teams.
+model where different teams have their own folder to create dashboards and alerts separated from other teams.
 
 The user model in the IAM system must be mapped to the Grafana model. The model include the objects for 
 organisation, team and user where teams and users are linked to an organisation.
 
 
-following attributes:
-
-- name - A "real" name of the user, e.g. first and last name
-- email - users email
-- login - the "username" - must be the same as the username for the SSO
-- role - Can be Viewer, Editor or Admin, default Viewer
-- password - The password can only be set when a user is added and should only be used for providers that are not
-related to a SSO provider, since the authentication to Grafana is done by the SSO provider. 
-
-> The password is default set to a 30 character random string of a mix of characters, numbers and special characters.
-
-
 # Features
 - Integration with different IAM solution using a provider pattern.
+- Multiple providers could operate against same Grafana instance, but should not operate on the same organisation.
 - A user can belong to multiple organisations.
 - Automatic add and remove of user from organisation(s) based on the lifecycle in the IAM.
 - Update users in Grafana if any attributes in the user's IAM "object" is changed, e.g. the role, email.
@@ -114,6 +103,12 @@ python -m json_gonb_provider
 
 - Python 3.8
 - Grafana 9 - tested on 9.3.6
+
+# Important notes
+- Password can be set by the provider, but should typical not since SSO would typical be used. 
+The default is to set the password to a 30 character random string of a mix of characters, 
+numbers and special characters.
+
 
 # Future
 - Support for Grafana Enterprise options for RBAC and team sync groups
