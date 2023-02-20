@@ -581,6 +581,9 @@ class GrafanaTeam(GrafanaConnection):
         for organisation_name, organisation in iam_organisations.items():
             try:
                 for team_name, team in organisation.teams.items():
+                    if organisation_name not in self.organisations_by_organisation_name:
+                        log.warning('organisation do not exist', extra={'organisation': organisation_name, 'team': team_name})
+                        continue
                     team.org_id = self.organisations_by_organisation_name[organisation_name].org_id
                     if team_name in self.organisations_by_organisation_name[organisation_name].teams.keys():
                         # Update teams for organisation
