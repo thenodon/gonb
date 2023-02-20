@@ -13,7 +13,7 @@ Gonb should be run using some scheduling tool to keep user in sync with the user
 
 A typical patterns supported are:
 - Map users in an IAM group to a corresponding organisation.
-- Map users in an IAM group into a organisation and team
+- Map users in an IAM group into an organisation and team
 
 In the later use case gonb also provide the creation of folders that are specific to a team. This support the 
 model where different teams have their own folder to create dashboards and alerts separated from other teams.
@@ -35,7 +35,7 @@ for team is Editor.
 
 # Argument passing
 The only way to pass arguments to gonb is by environment variables. Each provider must define their own and 
-required environment variables and they must be exposed by the interface method:
+required environment variables, and they must be exposed by the interface method:
 
 ```python
 def mandatory_env_vars(self) -> Dict[str, str]:
