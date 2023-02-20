@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from json_team_dto_gonb_provider.json_file import execute
+from json_team_gonb_provider.json_file import execute
 if __name__ == "__main__":
     execute()
     
