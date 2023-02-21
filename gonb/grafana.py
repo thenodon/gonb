@@ -20,6 +20,7 @@ from typing import Dict, Set, List, Any
 
 import requests
 
+from gonb.admin_user import AdminUsers, AdminUser
 from gonb.exceptions import GrafanaException
 from gonb.folder import Folder, folder_factory, permission_factory, PermissionTeam
 from gonb.organisation_transfer import OrganizationDTO
@@ -38,6 +39,7 @@ GONB_GRAFANA_URL = 'GONB_GRAFANA_URL'
 GONB_GRAFANA_USER = 'GONB_GRAFANA_USER'
 GONB_GRAFANA_PASSWORD = 'GONB_GRAFANA_PASSWORD'
 GONB_GRAFANA_CREATE_ORGS = 'GONB_GRAFANA_CREATE_ORGS'
+GONB_GRAFANA_ADMINS = 'GONB_GRAFANA_ADMINS'
 
 env_vars = {GONB_GRAFANA_URL: 'The grafana server url',
             GONB_GRAFANA_USER: 'A grafana user with admin permission',
@@ -302,8 +304,16 @@ class GrafanaConnection(GrafanaAPI):
         self.create_orgs: bool = strtobool(os.getenv(GONB_GRAFANA_CREATE_ORGS, 'FALSE'))
         # List of all valid access roles - only Enterprise
         self.grafana_access_roles: Dict[str, AccessControl] = {}
+        # Set by the _init_organizations
         self.global_users: Dict[str, Dict] = {}
+        self.admin_users: AdminUsers = AdminUsers()
         self.organisations_by_organisation_name: Dict[str, Organization] = {}
+
+        # Read all organisation related data
+        self._init_organizations()
+
+    def _using_main(self):
+        self._post_by_admin(url=f"api/user/using/1")
 
     def _is_enterprise(self):
         try:
@@ -369,17 +379,25 @@ class GrafanaConnection(GrafanaAPI):
         }
 
         try:
+            # If user do not exist in the instance add the user
             status = self._post_by_admin('api/admin/users', user_body)
             user_id = status['id']
             log.info('user created', extra={'org_id': org_id, 'status': status})
+
+            if user.grafana_admin:
+                status = self._put_by_admin(url=f"api/admin/users/{user_id}/permissions",
+                                            body={"isGrafanaAdmin": True})
+                log.info('user is grafana admin', extra={'org_id': org_id, 'role': user.role, 'status': status})
+
             if user.role and (user.role == 'Editor' or user.role == 'Admin'):
+                # Add the role specific to the organisation
                 status = self._patch_by_admin_using_orgid(url=f"api/org/users/{user_id}", org_id=org_id,
                                                           body={'role': user.role})
                 log.info('user role', extra={'org_id': org_id, 'role': user.role, 'status': status})
 
         except GrafanaException as err:
             if err.status() == 412:
-                # The user already exist but not in this organisation
+                # The user already exist but not in the organisation
                 status = self._post_by_admin_using_orgid(url='api/org/users', org_id=org_id,
                                                          body={
                                                              "role": user.role,
@@ -405,10 +423,25 @@ class GrafanaConnection(GrafanaAPI):
         }
 
         status = self._put_by_admin_using_orgid(url=f"api/users/{user.user_id}", org_id=org_id, body=user_body)
-        # self._post_by_admin(f"api/user/using/{org_id}")
-        # status = self._patch_by_admin(f"api/org/users/{user.user_id}", user_body)
         log.info('user updated', extra={'org_id': org_id, 'data': user_body, 'status': status})
         return status
+
+    def _add_admin_permissions(self, user_ids: Set[str]):
+        body = {'isGrafanaAdmin': True}
+        self._update_permission(user_ids=user_ids, body=body)
+
+    def _delete_admin_permissions(self, user_ids: Set[str]):
+        body = {'isGrafanaAdmin': False}
+        self._update_permission(user_ids=user_ids, body=body)
+
+    def _update_permission(self, user_ids: Set[str], body: Dict[str, Any]):
+        for user_id in user_ids:
+            if user_id in self.global_users:
+                self._put_by_admin(url=f"api/admin/users/{self.global_users[user_id]['id']}/permissions", body=body)
+                log.info("user permission", extra={'user': user_id, 'grafana_admin': body['isGrafanaAdmin']})
+            else:
+                log.warning("user permission failed", extra={'user': user_id, 'grafana_admin': body['isGrafanaAdmin'],
+                                                             'error': 'user does not exist'})
 
     def _init_organizations(self):
         """
@@ -418,16 +451,19 @@ class GrafanaConnection(GrafanaAPI):
         """
 
         # Get all "global user" - need the isAdmin which is the grafana instance admin
-        page = 1
-        per_page = 1000
-        while True:
-            result = self._get_by_admin(f"api/users?perpage={per_page}&page={page}")
-            for entry in result:
-                self.global_users[entry['login']] = entry
+        if strtobool(os.getenv(GONB_GRAFANA_ADMINS, 'FALSE')):
+            page = 1
+            per_page = 1000
+            while True:
+                result = self._get_by_admin(f"api/users?perpage={per_page}&page={page}")
+                for entry in result:
+                    self.global_users[entry['login']] = entry
+                    if 'isAdmin' in entry and entry['isAdmin']:
+                        self.admin_users.add(AdminUser(login_name=entry['login'], user_id=entry['id'], is_admin=True))
 
-            if len(result) < per_page:
-                break
-            page = page + 1
+                if len(result) < per_page:
+                    break
+                page = page + 1
 
         # Get all organisations
         all_orgs = self._get_by_admin('api/orgs')
@@ -450,9 +486,7 @@ class GrafanaUser(GrafanaConnection):
     def __init__(self):
         super().__init__()
 
-        self._init_organizations()
-
-    def provision_organizations_users(self, iam_organisations: Dict[str, Organization]) \
+    def provision(self, iam_organisations: Dict[str, Organization]) \
             -> Dict[str, Dict[str, List[User]]]:
         """
         Add/delete users in the Grafana organisations based on the content in source
@@ -482,6 +516,7 @@ class GrafanaUser(GrafanaConnection):
         for org, action in users_managed.items():
             log.info("user operations", extra={'organisation': org, UPDATED: len(action[UPDATED]),
                                                ADDED: len(action[ADDED]), REMOVED: len(action[REMOVED])})
+        self._using_main()
         return users_managed
 
     def _add_organisations(self, organisations: Set[str]) -> List[Organization]:
@@ -532,7 +567,7 @@ class GrafanaUser(GrafanaConnection):
         return removed_users
 
     def _add_users(self, organisation_name: str, user_names: Set[str], iam_organisations: Dict[str, Organization]) -> \
-    List[User]:
+            List[User]:
         """
         Add users to an organisation
         :param organisation_name:
@@ -557,10 +592,8 @@ class GrafanaUser(GrafanaConnection):
 class GrafanaTeam(GrafanaConnection):
     def __init__(self):
         super().__init__()
-        # self.organisations_by_organisation_name: Dict[str, Organization] = \
-        self._init_organizations()
 
-    def provision_organisation_teams(self, iam_organisations: Dict[str, Organization]):
+    def provision(self, iam_organisations: Dict[str, Organization]):
         """
         Provision and manage teams include the following logic:
         - Every Team will have a Folder with the same name
@@ -582,7 +615,8 @@ class GrafanaTeam(GrafanaConnection):
             try:
                 for team_name, team in organisation.teams.items():
                     if organisation_name not in self.organisations_by_organisation_name:
-                        log.warning('organisation do not exist', extra={'organisation': organisation_name, 'team': team_name})
+                        log.warning('organisation do not exist',
+                                    extra={'organisation': organisation_name, 'team': team_name})
                         continue
                     team.org_id = self.organisations_by_organisation_name[organisation_name].org_id
                     if team_name in self.organisations_by_organisation_name[organisation_name].teams.keys():
@@ -597,6 +631,7 @@ class GrafanaTeam(GrafanaConnection):
                 log.error('team operation failed - continue with next', extra={'organisation': organisation_name,
                                                                                'error': str(err)})
                 continue
+        self._using_main()
 
     def _create_team(self, organisation: Organization, team: Team):
         team = self._add_team_and_members(organisation, team)
@@ -608,12 +643,14 @@ class GrafanaTeam(GrafanaConnection):
         self._add_team_folder(organisation, team)
 
     def _add_team_sync_groups(self, organisation, team):
+        # TODO enterprise
         if team.sync_groups_id:
             body = {'groupId': team.sync_groups_id}
             response = self._post_by_admin_using_orgid(f"api/teams/{team.team_id}/groups", body=body,
                                                        org_id=organisation.org_id)
 
     def _add_team_roles(self, organisation: Organization, team: Team):
+        # TODO enterprise
         body = {'roleUids': self._role_name_to_uid(team.access_control.values())}
         self._put_by_admin_using_orgid(f"/api/access-control/teams/{team.team_id}/roles", body=body,
                                        org_id=organisation.org_id)
@@ -656,6 +693,7 @@ class GrafanaTeam(GrafanaConnection):
         self._update_teams_folder(organisation, iam_team)
 
     def _update_team_sync_groups(self, iam_team, organisation):
+        # TODO enterprise
         if iam_team.sync_groups_id:
             sync_groups_del = set(iam_team.sync_groups_id) - set(organisation.teams[iam_team.name].sync_groups_id)
             sync_groups_add = set(organisation.teams[iam_team.name].sync_groups_id) - set(iam_team.sync_groups_id)
@@ -673,13 +711,14 @@ class GrafanaTeam(GrafanaConnection):
     def _update_team_members(self, organisation: Organization, iam_team: Team):
         # Get existing members
         if self._is_enterprise():
+            # TODO enterprise
             pass
 
         members_to_del = set(organisation.teams[iam_team.name].members) - set(iam_team.members)
         members_to_add = set(iam_team.members) - set(organisation.teams[iam_team.name].members)
 
         for member in members_to_del:
-            response = self._delete_by_admin_using_orgid(
+            self._delete_by_admin_using_orgid(
                 f"api/teams/{organisation.teams[iam_team.name].team_id}/members/{organisation.users[member].user_id}",
                 org_id=organisation.org_id)
             log.info('team user delete', extra={'organisation': organisation.organisation_name,
@@ -687,7 +726,7 @@ class GrafanaTeam(GrafanaConnection):
         for member in members_to_add:
             if member in organisation.users.keys():
                 body = {'userId': organisation.users[member].user_id}
-                response = self._post_by_admin_using_orgid(
+                self._post_by_admin_using_orgid(
                     f"api/teams/{organisation.teams[iam_team.name].team_id}/members",
                     body=body,
                     org_id=organisation.org_id)
@@ -713,7 +752,7 @@ class GrafanaTeam(GrafanaConnection):
                 # Add existing members to the team
 
                 body = {'userId': organisation.users[member].user_id}
-                response = self._post_by_admin_using_orgid(f"api/teams/{team.team_id}/members", body=body,
+                self._post_by_admin_using_orgid(f"api/teams/{team.team_id}/members", body=body,
                                                            org_id=team.org_id)
                 log.info('team user add', extra={'organisation': organisation.organisation_name,
                                                  'team': team.name, 'member': member})
@@ -832,19 +871,56 @@ class GrafanaTeam(GrafanaConnection):
         return parsed_list
 
 
+class GrafanaAdmin(GrafanaConnection):
+    def __init__(self):
+        super().__init__()
+
+    def provision(self, iam_admins: AdminUsers):
+        add, delete = self.admin_users.diff(iam_admins)
+        self._add_admin_permissions(add)
+        self._delete_admin_permissions(delete)
+        self._using_main()
+
+
 def provision(iam_organisations: Dict[str, OrganizationDTO]):
     """
     Execute on the source IAM based organisation
     :param iam_organisations:
     :return:
     """
+    # Transform DTO object to Grafana objects
     organisations = _dto_to_organisations(iam_organisations)
+    admins = _dto_to_admins(iam_organisations)
 
-    GrafanaUser().provision_organizations_users(organisations)
-    GrafanaTeam().provision_organisation_teams(organisations)
+    # Provision Grafana organisations and organisation users
+    grafana_users = GrafanaUser()
+    grafana_users.provision(organisations)
+
+    # Provision Grafana Teams
+    grafana_teams = GrafanaTeam()
+    grafana_teams.provision(organisations)
+
+    if strtobool(os.getenv(GONB_GRAFANA_ADMINS, 'FALSE')):
+        # If enabled, provision admin users
+        grafana_admins = GrafanaAdmin()
+        grafana_admins.provision(admins)
 
 
-def _dto_to_organisations(iam_organisations):
+def _dto_to_admins(iam_organisations) -> AdminUsers:
+    """
+    Get all users marked as grafana admins independent of organization
+    :param iam_organisations:
+    :return:
+    """
+    admins = AdminUsers()
+    for name, organisation_dto in iam_organisations.items():
+        for user_name, user_dto in organisation_dto.users.items():
+            if user_dto.grafana_admin:
+                admins.add(AdminUser(login_name=user_dto.login, is_admin=True))
+    return admins
+
+
+def _dto_to_organisations(iam_organisations) -> Dict[str, Organization]:
     """
     Translate DTO organisation to organisation
     :param iam_organisations:
@@ -860,7 +936,7 @@ def _dto_to_organisations(iam_organisations):
             user.role = user_dto.role
             user.email = user_dto.email
             user.name = user_dto.name
-            user.grafana_admin = user.grafana_admin
+            user.grafana_admin = user_dto.grafana_admin
             organisation.users[user.login] = user
 
         for team_name, team_dto in organisation_dto.teams.items():
