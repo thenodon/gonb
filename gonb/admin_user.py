@@ -17,8 +17,10 @@ from typing import Dict, Set, Tuple
 
 
 class AdminUser:
-    def __init__(self, login_name: str, user_id: int, is_admin: bool = False):
+    def __init__(self, login_name: str, user_id: int = 0, is_admin: bool = False):
         self.login: str = login_name
+        # The 0 id is an indication that the AdminUser is not created based on Grafana
+        # content
         self.id: int = user_id
         self.is_admin = is_admin
 
@@ -28,7 +30,13 @@ class AdminUsers:
         self._admin_users: Dict[str, AdminUser] = {}
 
     def add(self, admin_user: AdminUser):
-        if 'admin' != admin_user.login and admin_user.login not in self._admin_users.keys():
+        """
+        Add an admin user but only if is_admin is True.
+        :param admin_user:
+        :return:
+        """
+        if 'admin' != admin_user.login and admin_user.login not in self._admin_users.keys() \
+                and admin_user.is_admin:
             self._admin_users[admin_user.login] = admin_user
 
     def get_user(self) -> Set[str]:
