@@ -18,7 +18,7 @@ import unittest
 from gonb.user import User
 
 
-class DiffTest(unittest.TestCase):
+class UserTest(unittest.TestCase):
 
     def test_user_valid(self):
 
