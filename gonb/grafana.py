@@ -888,13 +888,20 @@ def provision(iam_organisations: Dict[str, OrganizationDTO]):
     :param iam_organisations:
     :return:
     """
+    # Transform DTO object to Grafana objects
     organisations = _dto_to_organisations(iam_organisations)
     admins = _dto_to_admins(iam_organisations)
+
+    # Provision Grafana organisations and organisation users
     grafana_users = GrafanaUser()
     grafana_users.provision(organisations)
+
+    # Provision Grafana Teams
     grafana_teams = GrafanaTeam()
     grafana_teams.provision(organisations)
+
     if strtobool(os.getenv(GONB_GRAFANA_ADMINS, 'FALSE')):
+        # If enabled, provision admin users
         grafana_admins = GrafanaAdmin()
         grafana_admins.provision(admins)
 
@@ -909,7 +916,7 @@ def _dto_to_admins(iam_organisations) -> AdminUsers:
     for name, organisation_dto in iam_organisations.items():
         for user_name, user_dto in organisation_dto.users.items():
             if user_dto.grafana_admin:
-                admins.add(AdminUser(login_name=user_dto.login, user_id=0, is_admin=True))
+                admins.add(AdminUser(login_name=user_dto.login, is_admin=True))
     return admins
 
 
