@@ -73,6 +73,8 @@ class JSONFile(Provider):
                         user.name = f"{user_data['firstName']} {user_data['lastName']}"
                         user.email = user_data['email']
                         user.role = user_data['role']
+                        if 'is_grafana_admin' in user_data:
+                            user.grafana_admin = user_data['is_grafana_admin']
                         org.users[user.login] = user
         return orgs
 
