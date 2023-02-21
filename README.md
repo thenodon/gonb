@@ -32,6 +32,7 @@ organisation, team and user where teams and users are linked to an organisation.
 - Automatic creation of team folder, folder with same name as team, if teams are created. Default folder permission
 for team is Editor. 
 - Team member lifecycle in the same way as for users in organisation
+- Manage permission for user with Grafana Admin (instance admin) rights. Default is false.
 
 # Argument passing
 The only way to pass arguments to gonb is by environment variables. Each provider must define their own and 
@@ -48,6 +49,7 @@ For the grafana integration the following 3 must exist and have valid values:
 - GONB_GRAFANA_USER
 - GONB_GRAFANA_PASSWORD
 - GONB_GRAFANA_CREATE_ORGS - Will create organisation(s) if not exists, default `False`
+- GONB_GRAFANA_ADMINS - will manage users Grafana admin rights, default `False`
 
 # Develop a provider
 A provider must implement the class `gonb.provider.Provider` and implement the following methods:

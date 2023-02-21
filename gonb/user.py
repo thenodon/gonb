@@ -33,7 +33,6 @@ class User:
         self.role: str = 'Viewer'
         self.user_id: int = 0
         self.password = password
-        self.grafana_admin: bool = False
         if not self.password:
             self.password = create_random_string()
 
