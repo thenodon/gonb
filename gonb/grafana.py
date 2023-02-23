@@ -423,6 +423,8 @@ class GrafanaConnection(GrafanaAPI):
         }
 
         status = self._put_by_admin_using_orgid(url=f"api/users/{user.user_id}", org_id=org_id, body=user_body)
+        status = self._patch_by_admin_using_orgid(url=f"api/org/users/{user.user_id}", org_id=org_id,
+                                                  body={'role': user.role})
         log.info('user updated', extra={'org_id': org_id, 'data': user_body, 'status': status})
         return status
 
