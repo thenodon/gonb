@@ -110,8 +110,9 @@ python -m json_gonb_provider
 - Password can be set by the provider, but should typical not since SSO would typical be used. 
 The default is to set the password to a 30 character random string of a mix of characters, 
 numbers and special characters.
+- The GONB_GRAFANA_USER must be a Grafana instance admin.
 - If the GONB_GRAFANA_USER do not exist in an organization that is to be managed, the user is added as an organization 
-admin.
+admin. 
 
 
 
