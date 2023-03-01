@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from typing import Dict, Set, Tuple
+from gonb.organization import Organization
 
 
 class AdminUser:
@@ -26,12 +27,13 @@ class AdminUser:
 
 
 class AdminUsers:
-    def __init__(self):
+    def __init__(self, exclude_user: str):
+        self.exclude_user = exclude_user
         self._admin_users: Dict[str, AdminUser] = {}
 
     def add(self, admin_user: AdminUser):
         """
-        Add an admin user but only if is_admin is True.
+        Add an admin user but only if is_admin is True
         :param admin_user:
         :return:
         """
@@ -45,11 +47,16 @@ class AdminUsers:
     def get(self) -> Dict[str, AdminUser]:
         return self._admin_users
 
-    def diff(self, other) -> Tuple[Set[str], Set[str]]:
+    def diff(self, other, organization: Organization) -> Tuple[Set[str], Set[str]]:
         add: Set[str] = set()
         delete: Set[str] = set()
         if isinstance(other, AdminUsers):
-            delete = set(self._admin_users.keys()) - set(other._admin_users.keys())
+
+            # Only delete admin if the that are part of the organization
+            all_in_org = set(organization.users.keys()) - set(other._admin_users.keys())
+            delete = all_in_org & set(self._admin_users.keys())
+            if self.exclude_user in delete:
+                delete.remove(self.exclude_user)
             add = set(other._admin_users.keys()) - set(self._admin_users.keys())
 
         return add, delete

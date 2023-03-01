@@ -21,14 +21,14 @@ from gonb.admin_user import AdminUsers, AdminUser
 class AdminUserTest(unittest.TestCase):
 
     def test_admin_user(self):
-        iam_admins = AdminUsers()
+        iam_admins = AdminUsers(None)
         user = AdminUser(login_name="andy@foo.com", is_admin=True)
         iam_admins.add(user)
         user = AdminUser(login_name="boo@foo.com", is_admin=True)
         iam_admins.add(user)
         self.assertTrue(len(iam_admins.get()) == 2)
 
-        admins = AdminUsers()
+        admins = AdminUsers("foobar_admin")
 
         add, delete = admins.diff(iam_admins)
         self.assertTrue(len(add) == 2)

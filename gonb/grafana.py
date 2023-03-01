@@ -322,7 +322,7 @@ class GrafanaConnection(GrafanaAPI):
         self.grafana_access_roles: Dict[str, AccessControl] = {}
         # Set by the _init_organizations
         self.global_users: Dict[str, Dict] = {}
-        self.admin_users: AdminUsers = AdminUsers()
+        self.admin_users: AdminUsers = AdminUsers(self.username)
         self.organisations_by_organisation_name: Dict[str, Organization] = {}
 
         # Read all organisation related data
@@ -509,7 +509,7 @@ class GrafanaUser(GrafanaConnection):
         :return:
         """
 
-        diff_users = DiffUsers(iam_organisations, self.organisations_by_organisation_name)
+        diff_users = DiffUsers(iam_organisations, self.organisations_by_organisation_name, self.username)
 
         added_organisations = self._add_organisations(diff_users.add_organisations())
         for organisation in added_organisations:
@@ -845,7 +845,7 @@ class GrafanaTeam(GrafanaConnection):
                 member_data = self._get_by_api_key(f"api/teams/{team.team_id}/members", api_key=organisation.api_key)
                 for member in member_data:
                     # Always exclude admin
-                    if member['login'] != 'admin':
+                    if member['login'] != 'admin' and member['login'] != self.username:
                         team.members.add(member['login'])
 
     def _get_all_folders(self, organisation: Organization) -> Dict[str, Folder]:
@@ -889,11 +889,13 @@ class GrafanaAdmin(GrafanaConnection):
     def __init__(self):
         super().__init__()
 
-    def provision(self, iam_admins: AdminUsers):
-        add, delete = self.admin_users.diff(iam_admins)
-        self._add_admin_permissions(add)
-        self._delete_admin_permissions(delete)
-        self._using_main()
+    def provision(self, iam_admins: Dict[str, AdminUsers], iam_organisations: Dict[str, Organization]):
+        for org_name, admins in iam_admins.items():
+            add, delete = self.admin_users.diff(admins, iam_organisations[org_name])
+            self._add_admin_permissions(add)
+            # Delete should never be done since we can never know which organisation should have precedence
+            self._delete_admin_permissions(delete)
+            self._using_main()
 
 
 def provision(iam_organisations: Dict[str, OrganizationDTO]):
@@ -903,8 +905,7 @@ def provision(iam_organisations: Dict[str, OrganizationDTO]):
     :return:
     """
     # Transform DTO object to Grafana objects
-    organisations = _dto_to_organisations(iam_organisations)
-    admins = _dto_to_admins(iam_organisations)
+    organisations: Dict[str, Organization] = _dto_to_organisations(iam_organisations)
 
     # Provision Grafana organisations and organisation users
     grafana_users = GrafanaUser()
@@ -916,23 +917,26 @@ def provision(iam_organisations: Dict[str, OrganizationDTO]):
 
     # Provision Grafana admin users
     if strtobool(os.getenv(GONB_GRAFANA_ADMINS, 'FALSE')):
+        admins: Dict[str, AdminUsers] = _dto_to_admins(iam_organisations)
         # If enabled, provision admin users
         grafana_admins = GrafanaAdmin()
-        grafana_admins.provision(admins)
+        grafana_admins.provision(admins, organisations)
 
 
-def _dto_to_admins(iam_organisations) -> AdminUsers:
+def _dto_to_admins(iam_organisations) -> Dict[str, AdminUsers]:
     """
-    Get all users marked as grafana admins independent of organization
+    Get all users marked as grafana admins by organization
     :param iam_organisations:
     :return:
     """
-    admins = AdminUsers()
+    admins_by_org = {}
     for name, organisation_dto in iam_organisations.items():
+        admins = AdminUsers(None)
+        admins_by_org[name] = admins
         for user_name, user_dto in organisation_dto.users.items():
             if user_dto.grafana_admin:
                 admins.add(AdminUser(login_name=user_dto.login, is_admin=True))
-    return admins
+    return admins_by_org
 
 
 def _dto_to_organisations(iam_organisations) -> Dict[str, Organization]:

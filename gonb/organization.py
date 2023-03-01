@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import json
-from typing import Dict, Set, List
+from typing import Dict, Set
 
 from gonb.user import User
 from gonb.team import Team
@@ -33,22 +33,28 @@ class Organization:
             {key: value for key, value in self.__dict__.items() if not key.startswith('__') and not callable(key)})
 
 
-
 class DiffUsers:
-    def __init__(self, iam_orgs: Dict[str, Organization], grafana_orgs: Dict[str, Organization]):
+    def __init__(self, iam_orgs: Dict[str, Organization], grafana_orgs: Dict[str, Organization], exclude_user):
         self._iam_orgs = iam_orgs
         self._grafana_orgs = grafana_orgs
+        self.exclude_user = exclude_user
 
         self.iam_users_idx: Dict[str, Set[str]] = DiffUsers._get_user_idx(self._iam_orgs)
         self.grafana_users_idx: Dict[str, Set[str]] = DiffUsers._get_user_idx(self._grafana_orgs)
 
     def add(self, organisation_name: str) -> Set[str]:
         self._init(organisation_name=organisation_name)
-        return self.iam_users_idx[organisation_name] - self.grafana_users_idx[organisation_name]
+        add_users = self.iam_users_idx[organisation_name] - self.grafana_users_idx[organisation_name]
+        if self.exclude_user in add_users:
+            add_users.remove(self.exclude_user)
+        return add_users
 
     def delete(self, organisation_name: str) -> Set[str]:
         self._init(organisation_name=organisation_name)
-        return self.grafana_users_idx[organisation_name] - self.iam_users_idx[organisation_name]
+        del_users = self.grafana_users_idx[organisation_name] - self.iam_users_idx[organisation_name]
+        if self.exclude_user in del_users:
+            del_users.remove(self.exclude_user)
+        return del_users
 
     def update(self, organisation_name: str) -> Set[str]:
         # Get the intersection
@@ -58,6 +64,8 @@ class DiffUsers:
             if self._grafana_orgs[organisation_name].users[user_name] != \
                     self._iam_orgs[organisation_name].users[user_name]:
                 update_users.add(user_name)
+        if self.exclude_user in update_users:
+            update_users.remove(self.exclude_user)
         return update_users
 
     def _init(self, organisation_name: str):

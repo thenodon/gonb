@@ -33,7 +33,7 @@ class DiffTest(unittest.TestCase):
         orgs_iam[org.organisation_name] = org
 
         # Two empty organisations
-        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana)
+        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana, exclude_user="foobar_admin")
         self.assertEqual(len(diff.update('foo_org')), 0)
         self.assertEqual(len(diff.add('foo_org')), 0)
         self.assertEqual(len(diff.delete('foo_org')), 0)
@@ -45,7 +45,7 @@ class DiffTest(unittest.TestCase):
         orgs_iam['foo_org'].users[user.login] = user
 
         # One user in the iam org
-        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana)
+        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana, exclude_user="foobar_admin")
         self.assertEqual(len(diff.update('foo_org')), 0)
         self.assertEqual(len(diff.add('foo_org')), 1)
         self.assertEqual(len(diff.delete('foo_org')), 0)
@@ -58,7 +58,7 @@ class DiffTest(unittest.TestCase):
         orgs_grafana['foo_org'].users[user.login] = user
 
         # "Same" user in both orgs
-        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana)
+        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana, exclude_user="foobar_admin")
         self.assertEqual(len(diff.update('foo_org')), 0)
         self.assertEqual(len(diff.add('foo_org')), 0)
         self.assertEqual(len(diff.delete('foo_org')), 0)
@@ -67,14 +67,14 @@ class DiffTest(unittest.TestCase):
         user.role = 'Editor'
 
         # "Same" user in both orgs but different roles
-        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana)
+        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana, exclude_user="foobar_admin")
         self.assertEqual(len(diff.update('foo_org')), 1)
         self.assertEqual(len(diff.add('foo_org')), 0)
         self.assertEqual(len(diff.delete('foo_org')), 0)
 
         # User do not exist in iam org, should be removed
         del orgs_iam['foo_org'].users[user.login]
-        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana)
+        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana, exclude_user="foobar_admin")
         self.assertEqual(len(diff.update('foo_org')), 0)
         self.assertEqual(len(diff.add('foo_org')), 0)
         self.assertEqual(len(diff.delete('foo_org')), 1)
