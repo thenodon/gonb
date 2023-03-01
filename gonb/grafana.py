@@ -271,15 +271,31 @@ class GrafanaAPI:
         except Exception as err:
             raise GrafanaException(message=err)
 
-    def _create_apikey(self, orgid: int):
+    def _create_apikey(self, organization: Organization):
         """
-        Create an apikey for an organisation. If the apikey, name, exists, it
-        will be deleted prior to a new with the same name is created
-        :param orgid:
+        Create an apikey for an organization. If the apikey, name, exists, it will be deleted prior to a new with the
+        same name is created.
+        If the grafana admin user is missing from the organization the user is added as an organization admin
+        :param organization:
         :return:
         """
-        # Activate org_id
-        self._post_by_admin(url=f"api/user/using/{orgid}")
+
+        # The user must be an admin member in the organisation - not enough that user just have grafana admin rights
+        # If the user is missing add the user
+
+        try:
+            status = self._post_by_admin(url=f'api/orgs/{organization.org_id}/users', body={
+                "role": 'admin',
+                "loginOrEmail": self.username
+            })
+            log.info('admin user was added to organization',
+                     extra={'admin_user': self.username, 'organization': organization.organisation_name,
+                            'status': status})
+        except GrafanaException:
+            # If exception it just means that our admin user existed
+            pass
+
+        self._post_by_admin(url=f"api/user/using/{organization.org_id}")
         # Get all existing
         existing_api_keys = self._get_by_admin(url=f"api/auth/keys")
         key_id = GrafanaAPI._find_api_key_id_by_name(existing_api_keys, GONB_APIKEY)
@@ -384,11 +400,6 @@ class GrafanaConnection(GrafanaAPI):
             user_id = status['id']
             log.info('user created', extra={'org_id': org_id, 'status': status})
 
-            if user.grafana_admin:
-                status = self._put_by_admin(url=f"api/admin/users/{user_id}/permissions",
-                                            body={"isGrafanaAdmin": True})
-                log.info('user is grafana admin', extra={'org_id': org_id, 'role': user.role, 'status': status})
-
             if user.role and (user.role == 'Editor' or user.role == 'Admin'):
                 # Add the role specific to the organisation
                 status = self._patch_by_admin_using_orgid(url=f"api/org/users/{user_id}", org_id=org_id,
@@ -476,7 +487,8 @@ class GrafanaConnection(GrafanaAPI):
                 continue
             # Create organization and add apikey
             organisation = Organization(organisation_name=org['name'], org_id=org['id'])
-            organisation.api_key = self._create_apikey(int(organisation.org_id))
+
+            organisation.api_key = self._create_apikey(organisation)
 
             self._get_users_by_organisation(organisation)
 
@@ -516,7 +528,7 @@ class GrafanaUser(GrafanaConnection):
                 self._add_users(organisation_name, diff_users.add(organisation_name), iam_organisations)
 
         for org, action in users_managed.items():
-            log.info("user operations", extra={'organisation': org, UPDATED: len(action[UPDATED]),
+            log.info("user operations", extra={'organization': org, UPDATED: len(action[UPDATED]),
                                                ADDED: len(action[ADDED]), REMOVED: len(action[REMOVED])})
         self._using_main()
         return users_managed
@@ -527,9 +539,9 @@ class GrafanaUser(GrafanaConnection):
             if self.create_orgs:
                 status = self._add_organisation_by_name(organisation=organisation_name)
                 added.append(Organization(organisation_name=organisation_name, org_id=status['orgId']))
-                log.info("organisation created", extra={'organisation': organisation_name})
+                log.info("organization created", extra={'organization': organisation_name})
             else:
-                log.warning("organisation missing in Grafana", extra={'organisation': organisation_name})
+                log.warning("organization missing in Grafana", extra={'organization': organisation_name})
 
         return added
 
@@ -545,7 +557,7 @@ class GrafanaUser(GrafanaConnection):
                 user.user_id = self.organisations_by_organisation_name[organisation_name].users[user_name].user_id
                 self._update_user_to_organisation(user, org.org_id)
                 update_users.append(org.users[user_name])
-                log.info('user update', extra={'organisation': organisation_name, 'user': user_name})
+                log.info('user update', extra={'organization': organisation_name, 'user': user_name})
         return update_users
 
     def _remove_users(self, organisation_name: str, user_names: Set[str]) -> List[User]:
@@ -565,7 +577,7 @@ class GrafanaUser(GrafanaConnection):
             if user_name in org.users:
                 self._remove_user_from_organisation(org.users[user_name], org.org_id)
                 removed_users.append(org.users[user_name])
-                log.info('user removed', extra={'organisation': organisation_name, 'user': user_name})
+                log.info('user removed', extra={'organization': organisation_name, 'user': user_name})
         return removed_users
 
     def _add_users(self, organisation_name: str, user_names: Set[str], iam_organisations: Dict[str, Organization]) -> \
@@ -586,7 +598,7 @@ class GrafanaUser(GrafanaConnection):
             if user_name not in org.users:
                 self._add_user_to_organisation(iam_organisations[organisation_name].users[user_name], org.org_id)
                 added_users.append(iam_organisations[organisation_name].users[user_name])
-                log.info('user add', extra={'organisation': organisation_name, 'user': user_name})
+                log.info('user add', extra={'organization': organisation_name, 'user': user_name})
 
         return added_users
 
@@ -617,20 +629,20 @@ class GrafanaTeam(GrafanaConnection):
             try:
                 for team_name, team in organisation.teams.items():
                     if organisation_name not in self.organisations_by_organisation_name:
-                        log.warning('organisation do not exist',
-                                    extra={'organisation': organisation_name, 'team': team_name})
+                        log.warning('organization do not exist',
+                                    extra={'organization': organisation_name, 'team': team_name})
                         continue
                     team.org_id = self.organisations_by_organisation_name[organisation_name].org_id
                     if team_name in self.organisations_by_organisation_name[organisation_name].teams.keys():
                         # Update teams for organisation
                         self._update_team(self.organisations_by_organisation_name[organisation_name], team)
-                        log.info('team updated', extra={'organisation': organisation_name, 'team': team_name})
+                        log.info('team updated', extra={'organization': organisation_name, 'team': team_name})
                     else:
                         # Add teams for organisation
                         self._create_team(self.organisations_by_organisation_name[organisation_name], team)
-                        log.info('team add', extra={'organisation': organisation_name, 'team': team_name})
+                        log.info('team add', extra={'organization': organisation_name, 'team': team_name})
             except GrafanaException as err:
-                log.error('team operation failed - continue with next', extra={'organisation': organisation_name,
+                log.error('team operation failed - continue with next', extra={'organization': organisation_name,
                                                                                'error': str(err)})
                 continue
         self._using_main()
@@ -672,7 +684,7 @@ class GrafanaTeam(GrafanaConnection):
         body = {'name': team.name, 'org_id': team.org_id}
         response = self._post_by_admin_using_orgid('api/teams', body=body, org_id=team.org_id)
         if 'teamId' not in response:
-            log.warning('team add failed ', extra={'organisation': organisation.organisation_name, 'team': team.name,
+            log.warning('team add failed ', extra={'organization': organisation.organisation_name, 'team': team.name,
                                                    'error': f"{response['message']}"})
             raise GrafanaException(f"operation=create team={team.name} error={response['message']}")
 
@@ -723,7 +735,7 @@ class GrafanaTeam(GrafanaConnection):
             self._delete_by_admin_using_orgid(
                 f"api/teams/{organisation.teams[iam_team.name].team_id}/members/{organisation.users[member].user_id}",
                 org_id=organisation.org_id)
-            log.info('team user delete', extra={'organisation': organisation.organisation_name,
+            log.info('team user delete', extra={'organization': organisation.organisation_name,
                                                 'team': iam_team.name, 'member': member})
         for member in members_to_add:
             if member in organisation.users.keys():
@@ -732,10 +744,10 @@ class GrafanaTeam(GrafanaConnection):
                     f"api/teams/{organisation.teams[iam_team.name].team_id}/members",
                     body=body,
                     org_id=organisation.org_id)
-                log.info('team user add', extra={'organisation': organisation.organisation_name,
+                log.info('team user add', extra={'organization': organisation.organisation_name,
                                                  'team': iam_team.name, 'member': member})
             else:
-                log.warning('team user add', extra={'organisation': organisation.organisation_name,
+                log.warning('team user add', extra={'organization': organisation.organisation_name,
                                                     'team': iam_team.name, 'member': member,
                                                     'error': "user do not exist"})
 
@@ -755,12 +767,12 @@ class GrafanaTeam(GrafanaConnection):
 
                 body = {'userId': organisation.users[member].user_id}
                 self._post_by_admin_using_orgid(f"api/teams/{team.team_id}/members", body=body,
-                                                           org_id=team.org_id)
-                log.info('team user add', extra={'organisation': organisation.organisation_name,
+                                                org_id=team.org_id)
+                log.info('team user add', extra={'organization': organisation.organisation_name,
                                                  'team': team.name, 'member': member})
 
             else:
-                log.warning('team user add failed', extra={'organisation': organisation.organisation_name,
+                log.warning('team user add failed', extra={'organization': organisation.organisation_name,
                                                            'team': team.name, 'member': member,
                                                            'error': f"member do not exist as a user"})
 
@@ -786,7 +798,7 @@ class GrafanaTeam(GrafanaConnection):
                 team_folder_permission.append({'teamId': team.team_id, 'permission': 2})
                 body = {'items': team_folder_permission}
                 self._post_by_admin_using_orgid(f"api/folders/{folder.uid}/permissions", body=body, org_id=team.org_id)
-                log.info('team folder add', extra={'organisation': organisation.organisation_name,
+                log.info('team folder add', extra={'organization': organisation.organisation_name,
                                                    'team': team.name, 'folder': folder.title})
 
     def _update_teams_folder(self, organisation: Organization, iam_team: Team):
@@ -810,7 +822,7 @@ class GrafanaTeam(GrafanaConnection):
                 self._post_by_admin_using_orgid(f"api/folders/{team.folder.uid}/permissions", body=body,
                                                 org_id=organisation.org_id)
 
-                log.info('team folder updated permission', extra={'organisation': organisation.organisation_name,
+                log.info('team folder updated permission', extra={'organization': organisation.organisation_name,
                                                                   'team': iam_team.name, 'folder': iam_team.name})
 
     def _get_all_teams(self, organisation: Organization, folders: Dict[str, Folder]):
@@ -839,7 +851,7 @@ class GrafanaTeam(GrafanaConnection):
     def _get_all_folders(self, organisation: Organization) -> Dict[str, Folder]:
         """
         Get all existing folders related to an organisation.
-        :param apikey:
+        :param organisation:
         :return:
         """
         folders_by_uid: Dict[str, Folder] = {}
@@ -902,6 +914,7 @@ def provision(iam_organisations: Dict[str, OrganizationDTO]):
     grafana_teams = GrafanaTeam()
     grafana_teams.provision(organisations)
 
+    # Provision Grafana admin users
     if strtobool(os.getenv(GONB_GRAFANA_ADMINS, 'FALSE')):
         # If enabled, provision admin users
         grafana_admins = GrafanaAdmin()

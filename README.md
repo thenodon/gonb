@@ -5,33 +5,33 @@ gonb - A Grafana onboarding tool
 ---------------------------------
 # Overview
 Gonb enable continues provisioning and configuration of Grafana based on an IAM source system.
-This includes the lifecycle of organisations, users and teams.   
+This includes the lifecycle of organizations, users and teams.   
 
 Users should authenticate using some SSO provider, but gonb us the same SSO IAM system to configure users into different
 Grafana organizations and teams. 
 Gonb should be run using some scheduling tool to keep user in sync with the users definition in the IAM source.
 
 A typical patterns supported are:
-- Map users in an IAM group to a corresponding organisation.
-- Map users in an IAM group into an organisation and team
+- Map users in an IAM group to a corresponding organization.
+- Map users in an IAM group into an organization and team
 
 In the later use case gonb also provide the creation of folders that are specific to a team. This support the 
 model where different teams have their own folder to create dashboards and alerts separated from other teams.
 
 The user model in the IAM system must be mapped to the Grafana model. The model include the objects for 
-organisation, team and user where teams and users are linked to an organisation.
+organization, team and user where teams and users are linked to an organization.
 
 
 # Features
 - Integration with different IAM solution using a provider pattern.
-- Multiple providers could operate against same Grafana instance, but should not operate on the same organisation.
-- A user can belong to multiple organisations.
-- Automatic add and remove of user from organisation(s) based on the lifecycle in the IAM.
+- Multiple providers could operate against same Grafana instance, but should not operate on the same organization.
+- A user can belong to multiple organizations.
+- Automatic add and remove of user from organization(s) based on the lifecycle in the IAM.
 - Update users in Grafana if any attributes in the user's IAM "object" is changed, e.g. the role, email.
-- Create organisation if they do not exist in Grafana, default false.
+- Create organization if they do not exist in Grafana, default false.
 - Automatic creation of team folder, folder with same name as team, if teams are created. Default folder permission
 for team is Editor. 
-- Team member lifecycle in the same way as for users in organisation
+- Team member lifecycle in the same way as for users in organization
 - Manage permission for user with Grafana Admin (instance admin) rights. Default is false.
 
 # Argument passing
@@ -48,7 +48,7 @@ For the grafana integration the following 3 must exist and have valid values:
 - GONB_GRAFANA_URL
 - GONB_GRAFANA_USER
 - GONB_GRAFANA_PASSWORD
-- GONB_GRAFANA_CREATE_ORGS - Will create organisation(s) if not exists, default `False`
+- GONB_GRAFANA_CREATE_ORGS - Will create organization(s) if not exists, default `False`
 - GONB_GRAFANA_ADMINS - will manage users Grafana admin rights, default `False`
 
 # Develop a provider
@@ -93,7 +93,7 @@ export GONB_GRAFANA_URL=http://localhost:3000
 export GONB_GRAFANA_USER=admin
 export GONB_JSON_FILE=json_file_example/users.json;
 
-# Set to true if organisations should be created if not existing
+# Set to true if organizations should be created if not existing
 export GONB_GRAFANA_CREATE_ORGS=true
 
 cp json_file_example/users_add.json json_file_example/users.json
@@ -110,6 +110,8 @@ python -m json_gonb_provider
 - Password can be set by the provider, but should typical not since SSO would typical be used. 
 The default is to set the password to a 30 character random string of a mix of characters, 
 numbers and special characters.
+- If the GONB_GRAFANA_USER do not exist in an organization that is to managed the user is added as an organization 
+admin.
 
 
 # Future
