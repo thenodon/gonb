@@ -50,6 +50,10 @@ For the grafana integration the following 3 must exist and have valid values:
 - GONB_GRAFANA_PASSWORD
 - GONB_GRAFANA_CREATE_ORGS - Will create organization(s) if not exists, default `False`
 - GONB_GRAFANA_ADMINS - will manage users Grafana admin rights, default `False`
+- GONB_SSO_PROVIDER - specify if the provider is based on a IAM used for Grafana authentication, default `True`.
+
+> If `GONB_SSO_PROVIDER` is True there is some updating operations that are not done by gonb, e.g. update a 
+> user's name or email.  
 
 # Develop a provider
 A provider must implement the class `gonb.provider.Provider` and implement the following methods:

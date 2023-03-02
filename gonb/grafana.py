@@ -40,6 +40,7 @@ GONB_GRAFANA_USER = 'GONB_GRAFANA_USER'
 GONB_GRAFANA_PASSWORD = 'GONB_GRAFANA_PASSWORD'
 GONB_GRAFANA_CREATE_ORGS = 'GONB_GRAFANA_CREATE_ORGS'
 GONB_GRAFANA_ADMINS = 'GONB_GRAFANA_ADMINS'
+GONB_SSO_PROVIDER = 'GONB_SSO_PROVIDER'
 
 env_vars = {GONB_GRAFANA_URL: 'The grafana server url',
             GONB_GRAFANA_USER: 'A grafana user with admin permission',
@@ -318,6 +319,7 @@ class GrafanaConnection(GrafanaAPI):
     def __init__(self):
         super().__init__()
         self.create_orgs: bool = strtobool(os.getenv(GONB_GRAFANA_CREATE_ORGS, 'FALSE'))
+        self.is_sso_provider: bool = strtobool(os.getenv(GONB_SSO_PROVIDER, 'TRUE'))
         # List of all valid access roles - only Enterprise
         self.grafana_access_roles: Dict[str, AccessControl] = {}
         # Set by the _init_organizations
@@ -433,7 +435,8 @@ class GrafanaConnection(GrafanaAPI):
             'role': user.role
         }
 
-        status = self._put_by_admin_using_orgid(url=f"api/users/{user.user_id}", org_id=org_id, body=user_body)
+        if not self.is_sso_provider:
+            status = self._put_by_admin_using_orgid(url=f"api/users/{user.user_id}", org_id=org_id, body=user_body)
         status = self._patch_by_admin_using_orgid(url=f"api/org/users/{user.user_id}", org_id=org_id,
                                                   body={'role': user.role})
         log.info('user updated', extra={'org_id': org_id, 'data': user_body, 'status': status})
