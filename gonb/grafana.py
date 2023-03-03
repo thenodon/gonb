@@ -657,6 +657,7 @@ class GrafanaTeam(GrafanaConnection):
         for organisation_name, organisation in self.organisations_by_organisation_name.items():
             # {'totalCount': 0, 'teams': [], 'page': 1, 'perPage': 1000}
 
+            # Get all folders and team data an update organisation object
             folders_by_organisation_name[organisation_name] = self._get_all_folders(organisation)
             self._get_all_teams(organisation, folders_by_organisation_name[organisation_name])
 
@@ -813,10 +814,11 @@ class GrafanaTeam(GrafanaConnection):
                                                            'error': f"member do not exist as a user"})
 
     def _add_team_folder(self, organisation: Organization, team: Team):
-        _, folders_data = self._get_by_admin_using_org_id("api/folders", org_id=team.org_id)
-        folder_titles = self._list_of_dict_values(folders_data, 'title')
+        #_, folders_data = self._get_by_admin_using_org_id("api/folders", org_id=team.org_id)
+        #folder_titles = self._list_of_dict_values(folders_data, 'title')
 
-        if team.name not in folder_titles:
+        #if team.name not in folder_titles:
+        if team.name not in organisation.folders.keys():
             # Create Folder
             body = {'title': team.name}
             status, response = self._post_by_admin_using_org_id(f"api/folders", body=body, org_id=team.org_id)
@@ -836,6 +838,23 @@ class GrafanaTeam(GrafanaConnection):
                 self._post_by_admin_using_org_id(f"api/folders/{folder.uid}/permissions", body=body, org_id=team.org_id)
                 log.info('team folder add', extra={'organization': organisation.organisation_name,
                                                    'team': team.name, 'folder': folder.title})
+        elif team.name in organisation.folders.keys():
+            # If the folder with team name exist check that team has editor permission, if not update the folder
+            # permission
+            folder = organisation.folders[team.name]
+            team_has_permission = False
+            for permission in folder.permissions:
+                if isinstance(permission, PermissionTeam) and permission.team_id == team.team_id and \
+                        permission.permission == 2:
+                    team_has_permission = True
+                    break
+            if not team_has_permission:
+                team_folder_permission = folder.formatted_permissions()
+                team_folder_permission.append({'teamId': team.team_id, 'permission': 2})
+                body = {'items': team_folder_permission}
+                self._post_by_admin_using_org_id(f"api/folders/{folder.uid}/permissions", body=body, org_id=team.org_id)
+                log.info('team folder permission updated', extra={'organization': organisation.organisation_name,
+                                                                  'team': team.name, 'folder': folder.title})
 
     def _update_teams_folder(self, organisation: Organization, iam_team: Team):
         team = organisation.teams[iam_team.name]
@@ -885,6 +904,35 @@ class GrafanaTeam(GrafanaConnection):
                         team.members.add(member['login'])
 
     def _get_all_folders(self, organisation: Organization) -> Dict[str, Folder]:
+        """
+        Get all existing folders related to an organisation.
+        :param organisation:
+        :return:
+        """
+        folders_by_uid: Dict[str, Folder] = {}
+        folders_by_title: Dict[str, Folder] = {}
+        # Search in top folder
+        _, folders_data = self._get_by_api_key('api/search?folderIds=0&type=dash-folder', api_key=organisation.api_key)
+        for folder_data in folders_data:
+            folder = folder_factory(folder_data)
+            _, permissions_data = self._get_by_api_key(f"api/folders/{folder.uid}/permissions",
+                                                       api_key=organisation.api_key)
+            for permission_data in permissions_data:
+                permission = permission_factory(permission_data)
+                folder.permissions.append(permission)
+
+            organisation.folders[folder.title] = folder
+            folders_by_uid[folder.uid] = folder
+
+        for folder in folders_by_uid.values():
+            if folder.title not in folders_by_title:
+                folders_by_title[folder.title] = folder
+            else:
+                raise GrafanaException(f"Folder title already exists {folder.title}")
+
+        return folders_by_title
+
+    def _get_all_folders_OLD(self, organisation: Organization) -> Dict[str, Folder]:
         """
         Get all existing folders related to an organisation.
         :param organisation:
