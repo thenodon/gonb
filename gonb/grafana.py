@@ -41,6 +41,9 @@ GONB_GRAFANA_PASSWORD = 'GONB_GRAFANA_PASSWORD'
 GONB_GRAFANA_CREATE_ORGS = 'GONB_GRAFANA_CREATE_ORGS'
 GONB_GRAFANA_ADMINS = 'GONB_GRAFANA_ADMINS'
 GONB_SSO_PROVIDER = 'GONB_SSO_PROVIDER'
+GONB_GRAFANA_MAIN_ORG = 'GONB_GRAFANA_MAIN_ORG'
+
+MAIN_ORG = 'Main Org.'
 
 env_vars = {GONB_GRAFANA_URL: 'The grafana server url',
             GONB_GRAFANA_USER: 'A grafana user with admin permission',
@@ -518,7 +521,7 @@ class GrafanaConnection(GrafanaAPI):
         _, all_orgs = self._get_by_admin('api/orgs')
 
         for org in all_orgs:
-            if org['id'] == 1:
+            if org['id'] == 1 and not strtobool(os.getenv(GONB_GRAFANA_MAIN_ORG, 'FALSE')):
                 # Do not include the Main org, 1
                 continue
             # Create organization and add apikey
@@ -990,7 +993,9 @@ def provision(iam_organisations: Dict[str, OrganizationDTO]):
     """
     # Transform DTO object to Grafana objects
     organisations: Dict[str, Organization] = _dto_to_organisations(iam_organisations)
-
+    if not strtobool(os.getenv(GONB_GRAFANA_MAIN_ORG, 'FALSE')):
+        del organisations[MAIN_ORG]
+        log.warning(f"Try to manage Main Org. but not allowed. Set env {GONB_GRAFANA_MAIN_ORG} to true")
     # Provision Grafana organisations and organisation users
     grafana_users = GrafanaUser()
     grafana_users.provision(organisations)
