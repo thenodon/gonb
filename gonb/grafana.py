@@ -16,7 +16,7 @@
 import json
 import logging as log
 import os
-from typing import Dict, Set, List, Any
+from typing import Dict, Set, List, Any, Tuple
 
 import requests
 
@@ -41,6 +41,9 @@ GONB_GRAFANA_PASSWORD = 'GONB_GRAFANA_PASSWORD'
 GONB_GRAFANA_CREATE_ORGS = 'GONB_GRAFANA_CREATE_ORGS'
 GONB_GRAFANA_ADMINS = 'GONB_GRAFANA_ADMINS'
 GONB_SSO_PROVIDER = 'GONB_SSO_PROVIDER'
+GONB_GRAFANA_MAIN_ORG = 'GONB_GRAFANA_MAIN_ORG'
+
+MAIN_ORG = 'Main Org.'
 
 env_vars = {GONB_GRAFANA_URL: 'The grafana server url',
             GONB_GRAFANA_USER: 'A grafana user with admin permission',
@@ -71,22 +74,27 @@ class GrafanaAPI:
         self.password = os.getenv(GONB_GRAFANA_PASSWORD)
         self.headers = {'Content-Type': 'application/json'}
 
-    def _get_by_admin(self, url):
+    def _get_by_admin(self, url, valid_status: List[int] = []) -> Tuple[int, Any]:
         """
         Do a GET with basic auth
         :param url:
         :return:
         """
+        valid_status.extend([200])
         try:
             r = requests.get(f"{self.base_url}/{url}", headers=self.headers, auth=(self.username, self.password),
                              verify=False)
-            if r.status_code != 200:
+            if r.status_code not in valid_status:
+                log.error('grafana api failed status', extra={'method': 'GET', 'url': url, 'status': r.status_code,
+                                                              'error': r.text})
                 raise GrafanaException(message=f"GET - Status code for {self.base_url}/{url} was {r.status_code}")
-            return r.json()
+            return r.status_code, r.json()
         except Exception as err:
+            log.error('grafana api failed', extra={'method': 'GET', 'url': url, 'error': str(err)})
             raise GrafanaException(message=err)
 
-    def _get_by_admin_using_orgid(self, url: str, org_id: int):
+    def _get_by_admin_using_org_id(self, url: str, org_id: int, valid_status: List[int] = []) -> \
+            Tuple[int, Any]:
         """
         Do a GET with basic auth
         :param url:
@@ -95,30 +103,35 @@ class GrafanaAPI:
         """
 
         self._post_by_admin(url=f"api/user/using/{org_id}")
-        return self._get_by_admin(url=url)
+        return self._get_by_admin(url=url, valid_status=valid_status)
 
-    def _post_by_admin(self, url: str, body=None):
+    def _post_by_admin(self, url: str, body=None, valid_status: List[int] = []) -> Tuple[int, Dict[Any, Any]]:
         """
         Do a POST with basic auth
         :param url:
         :param body:
         :return:
         """
+        valid_status.extend([200])
         if body is None:
             body = {}
         try:
             r = requests.post(f"{self.base_url}/{url}", headers=self.headers, auth=(self.username, self.password),
                               verify=False, data=json.dumps(body))
-            if r.status_code != 200:
+            if r.status_code not in valid_status:
+                log.error('grafana api failed status', extra={'method': 'POST', 'url': url, 'status': r.status_code,
+                                                              'error': r.text})
                 raise GrafanaException(message=f"POST - Status code for {self.base_url}/{url} was {r.status_code}",
                                        status=r.status_code)
-            return r.json()
+            return r.status_code, r.json()
         except GrafanaException as err:
             raise err
         except Exception as err:
+            log.error('grafana api failed', extra={'method': 'POST', 'url': url, 'error': str(err)})
             raise GrafanaException(message=err)
 
-    def _post_by_admin_using_orgid(self, url: str, org_id: int, body=None):
+    def _post_by_admin_using_org_id(self, url: str, org_id: int, body=None, valid_status: List[int] = []) -> \
+            Tuple[int, Any]:
         """
         Do a POST with basic auth and using org_id
         :param url:
@@ -127,9 +140,9 @@ class GrafanaAPI:
         """
 
         self._post_by_admin(url=f"api/user/using/{org_id}")
-        return self._post_by_admin(url=url, body=body)
+        return self._post_by_admin(url=url, body=body, valid_status=valid_status)
 
-    def _put_by_admin(self, url: str, body=None):
+    def _put_by_admin(self, url: str, body=None) -> Tuple[int, Any]:
         """
         Do a PUT with basic auth
         :param url:
@@ -142,15 +155,18 @@ class GrafanaAPI:
             r = requests.put(f"{self.base_url}/{url}", headers=self.headers, auth=(self.username, self.password),
                              verify=False, data=json.dumps(body))
             if r.status_code != 200:
+                log.error('grafana api failed status', extra={'method': 'PUT', 'url': url, 'status': r.status_code,
+                                                              'error': r.text})
                 raise GrafanaException(message=f"PUT - Status code for {self.base_url}/{url} was {r.status_code}",
                                        status=r.status_code)
-            return r.json()
+            return r.status_code, r.json()
         except GrafanaException as err:
             raise err
         except Exception as err:
+            log.error('grafana api failed', extra={'method': 'PUT', 'url': url, 'error': str(err)})
             raise GrafanaException(message=err)
 
-    def _put_by_admin_using_orgid(self, url: str, org_id: int, body=None):
+    def _put_by_admin_using_org_id(self, url: str, org_id: int, body=None) -> Tuple[int, Any]:
         """
         Do a PUT with basic auth and using org_id
         :param url:
@@ -159,9 +175,10 @@ class GrafanaAPI:
         """
 
         self._post_by_admin(url=f"api/user/using/{org_id}")
-        return self._put_by_admin(url=url, body=body)
+        status, response = self._put_by_admin(url=url, body=body)
+        return status, response
 
-    def _patch_by_admin(self, url, body=None):
+    def _patch_by_admin(self, url, body=None) -> Tuple[int, Any]:
         """
         Do a PATCH with basic auth
         :param url:
@@ -174,12 +191,15 @@ class GrafanaAPI:
             r = requests.patch(f"{self.base_url}/{url}", headers=self.headers, auth=(self.username, self.password),
                                verify=False, data=json.dumps(body))
             if r.status_code != 200:
+                log.error('grafana api failed status', extra={'method': 'PATCH', 'url': url, 'status': r.status_code,
+                                                              'error': r.text})
                 raise GrafanaException(message=f"PATCH - Status code for {self.base_url}/{url} was {r.status_code}")
-            return r.json()
+            return r.status_code, r.json()
         except Exception as err:
+            log.error('grafana api failed', extra={'method': 'PATCH ', 'url': url, 'error': str(err)})
             raise GrafanaException(message=err)
 
-    def _patch_by_admin_using_orgid(self, url: str, org_id: int, body=None):
+    def _patch_by_admin_using_org_id(self, url: str, org_id: int, body=None) -> Tuple[int, Any]:
         """
         Do a PATCH with basic auth and using org_id
         :param url:
@@ -190,7 +210,7 @@ class GrafanaAPI:
         self._post_by_admin(url=f"api/user/using/{org_id}")
         return self._patch_by_admin(url=url, body=body)
 
-    def _delete_by_admin(self, url):
+    def _delete_by_admin(self, url) -> Tuple[int, Any]:
         """
         Do a DELETE with basic auth
         :param url:
@@ -200,12 +220,15 @@ class GrafanaAPI:
             r = requests.delete(f"{self.base_url}/{url}", headers=self.headers, auth=(self.username, self.password),
                                 verify=False)
             if r.status_code != 200:
+                log.error('grafana api failed status', extra={'method': 'DELETE', 'url': url, 'status': r.status_code,
+                                                              'error': r.text})
                 raise GrafanaException(message=f"DELETE - Status code for {self.base_url}/{url} was {r.status_code}")
-            return r.json()
+            return r.status_code, r.json()
         except Exception as err:
+            log.error('grafana api failed', extra={'method': 'DELETE', 'url': url, 'error': str(err)})
             raise GrafanaException(message=err)
 
-    def _delete_by_admin_using_orgid(self, url: str, org_id: int):
+    def _delete_by_admin_using_orgid(self, url: str, org_id: int) -> Tuple[int, Any]:
         """
         Do a DELETE with basic auth and using org_id
         :param url:
@@ -215,45 +238,53 @@ class GrafanaAPI:
         self._post_by_admin(url=f"api/user/using/{org_id}")
         return self._delete_by_admin(url=url)
 
-    def _get_by_api_key(self, url, api_key):
+    def _get_by_api_key(self, url, api_key, valid_status: List[int] = []) -> Tuple[int, Any]:
         """
         Do a GET with apikey
         :param url:
         :param api_key:
         :return:
         """
+        valid_status.extend([200])
         headers = dict(self.headers)
         headers['Authorization'] = f"Bearer {api_key}"
 
         try:
             r = requests.get(f"{self.base_url}/{url}", headers=headers, verify=False)
-            if r.status_code != 200:
+            if r.status_code not in valid_status:
+                log.error('grafana api failed status', extra={'method': 'GET', 'url': url, 'status': r.status_code,
+                                                              'error': r.text, 'auth': 'apikey'})
                 raise GrafanaException(
                     message=f"GET apikey - Status code for {self.base_url}/{url} was {r.status_code}")
-            return r.json()
+            return r.status_code, r.json()
         except Exception as err:
+            log.error('grafana api failed', extra={'method': 'DELETE', 'url': url, 'error': str(err), 'auth': 'apikey'})
             raise GrafanaException(message=err)
 
-    def _post_by_api_key(self, url, api_key, body=None):
+    def _post_by_api_key(self, url, api_key, body=None, valid_status: List[int] = []) -> Tuple[int, Any]:
         """
         Do a GET with apikey
         :param url:
         :param api_key:
         :return:
         """
+        valid_status.extend([200])
         headers = dict(self.headers)
         headers['Authorization'] = f"Bearer {api_key}"
 
         try:
             r = requests.post(f"{self.base_url}/{url}", headers=headers, verify=False, data=json.dumps(body))
-            if r.status_code != 200:
+            if r.status_code not in valid_status:
+                log.error('grafana api failed status', extra={'method': 'POST', 'url': url, 'status': r.status_code,
+                                                              'error': r.text, 'auth': 'apikey'})
                 raise GrafanaException(
                     message=f"POST apikey - Status code for {self.base_url}/{url} was {r.status_code}")
-            return r.json()
+            return r.status_code, r.json()
         except Exception as err:
+            log.error('grafana api failed', extra={'method': 'POST', 'url': url, 'error': str(err), 'auth': 'apikey'})
             raise GrafanaException(message=err)
 
-    def _patch_by_api_key(self, url, api_key, body=None):
+    def _patch_by_api_key(self, url, api_key, body=None) -> Tuple[int, Any]:
         """
         Do a GET with apikey
         :param url:
@@ -266,10 +297,13 @@ class GrafanaAPI:
         try:
             r = requests.patch(f"{self.base_url}/{url}", headers=headers, verify=False, data=json.dumps(body))
             if r.status_code != 200:
+                log.error('grafana api failed status', extra={'method': 'PATCH', 'url': url, 'status': r.status_code,
+                                                              'error': r.text, 'auth': 'apikey'})
                 raise GrafanaException(
                     message=f"PATCH apikey - Status code for {self.base_url}/{url} was {r.status_code}")
-            return r.json()
+            return r.status_code, r.json()
         except Exception as err:
+            log.error('grafana api failed', extra={'method': 'PATCH', 'url': url, 'error': str(err), 'auth': 'apikey'})
             raise GrafanaException(message=err)
 
     def _create_apikey(self, organization: Organization):
@@ -284,27 +318,25 @@ class GrafanaAPI:
         # The user must be an admin member in the organisation - not enough that user just have grafana admin rights
         # If the user is missing add the user
 
-        try:
-            status = self._post_by_admin(url=f'api/orgs/{organization.org_id}/users', body={
-                "role": 'admin',
-                "loginOrEmail": self.username
-            })
+        status, response = self._post_by_admin(url=f'api/orgs/{organization.org_id}/users', body={
+            "role": 'admin',
+            "loginOrEmail": self.username
+        }, valid_status=[409])
+
+        if status == 200:
             log.info('admin user was added to organization',
                      extra={'admin_user': self.username, 'organization': organization.organisation_name,
                             'status': status})
-        except GrafanaException:
-            # If exception it just means that our admin user existed
-            pass
 
         self._post_by_admin(url=f"api/user/using/{organization.org_id}")
         # Get all existing
-        existing_api_keys = self._get_by_admin(url=f"api/auth/keys")
+        _, existing_api_keys = self._get_by_admin(url=f"api/auth/keys")
         key_id = GrafanaAPI._find_api_key_id_by_name(existing_api_keys, GONB_APIKEY)
         if key_id:
             # Delete it first
             self._delete_by_admin(url=f"api/auth/keys/{key_id}")
 
-        api_key = self._post_by_admin(url=f"api/auth/keys", body={'name': GONB_APIKEY, 'role': 'Admin'})
+        _, api_key = self._post_by_admin(url=f"api/auth/keys", body={'name': GONB_APIKEY, 'role': 'Admin'})
         return api_key['key']
 
     @staticmethod
@@ -334,17 +366,17 @@ class GrafanaConnection(GrafanaAPI):
         self._post_by_admin(url=f"api/user/using/1")
 
     def _is_enterprise(self):
-        try:
-            response = self._get_by_admin("api/licensing/check")
-            # Get all valid access control roles, used to validate at add and update
-            access_controls_data = self._get_by_admin('/api/access-control/roles')
-            for access_control_data in access_controls_data:
-                access_control = access_control_factory(access_control_data)
-                self.grafana_access_roles[access_control.name] = access_control
 
-            return True
-        except GrafanaException:
+        status, response = self._get_by_admin("api/licensing/check", valid_status=[404])
+        if status == 404:
             return False
+        # Get all valid access control roles, used to validate at add and update
+        status, access_controls_data = self._get_by_admin('/api/access-control/roles')
+        for access_control_data in access_controls_data:
+            access_control = access_control_factory(access_control_data)
+            self.grafana_access_roles[access_control.name] = access_control
+
+        return True
 
     def _add_organisation_by_name(self, organisation):
         """
@@ -354,7 +386,8 @@ class GrafanaConnection(GrafanaAPI):
         body = {
             "name": organisation
         }
-        return self._post_by_admin(url=f"api/orgs", body=body)
+        status, response = self._post_by_admin(url=f"api/orgs", body=body)
+        return response
 
     def _get_users_by_organisation(self, organisation: Organization):
         """
@@ -362,7 +395,7 @@ class GrafanaConnection(GrafanaAPI):
 
         :return:
         """
-        existing_users = self._get_by_api_key(url='api/org/users', api_key=organisation.api_key)
+        _, existing_users = self._get_by_api_key(url='api/org/users', api_key=organisation.api_key)
         for exist_user in existing_users:
             if exist_user['userId'] == 1:
                 continue
@@ -398,28 +431,28 @@ class GrafanaConnection(GrafanaAPI):
 
         try:
             # If user do not exist in the instance add the user
-            status = self._post_by_admin('api/admin/users', user_body)
-            user_id = status['id']
-            log.info('user created', extra={'org_id': org_id, 'status': status})
+            status, response = self._post_by_admin('api/admin/users', user_body)
+            user_id = response['id']
+            log.info('user created', extra={'org_id': org_id, 'status': response})
 
             if user.role and (user.role == 'Editor' or user.role == 'Admin'):
                 # Add the role specific to the organisation
-                status = self._patch_by_admin_using_orgid(url=f"api/org/users/{user_id}", org_id=org_id,
-                                                          body={'role': user.role})
-                log.info('user role', extra={'org_id': org_id, 'role': user.role, 'status': status})
+                status, response = self._patch_by_admin_using_org_id(url=f"api/org/users/{user_id}", org_id=org_id,
+                                                                     body={'role': user.role})
+                log.info('user role', extra={'org_id': org_id, 'role': user.role, 'status': response})
 
         except GrafanaException as err:
             if err.status() == 412:
                 # The user already exist but not in the organisation
-                status = self._post_by_admin_using_orgid(url='api/org/users', org_id=org_id,
-                                                         body={
-                                                             "role": user.role,
-                                                             "loginOrEmail": user.login
-                                                         })
-                log.info('user added to organization', extra={'org_id': org_id, 'role': user.role, 'status': status})
+                status, response = self._post_by_admin_using_org_id(url='api/org/users', org_id=org_id,
+                                                                    body={
+                                                                        "role": user.role,
+                                                                        "loginOrEmail": user.login
+                                                                    })
+                log.info('user added to organization', extra={'org_id': org_id, 'role': user.role, 'status': response})
             else:
                 raise err
-        return status
+        return response
 
     def _update_user_to_organisation(self, user: User, org_id: int):
         """
@@ -436,10 +469,13 @@ class GrafanaConnection(GrafanaAPI):
         }
 
         if not self.is_sso_provider:
-            status = self._put_by_admin_using_orgid(url=f"api/users/{user.user_id}", org_id=org_id, body=user_body)
-        status = self._patch_by_admin_using_orgid(url=f"api/org/users/{user.user_id}", org_id=org_id,
-                                                  body={'role': user.role})
-        log.info('user updated', extra={'org_id': org_id, 'data': user_body, 'status': status})
+            status, response = self._put_by_admin_using_org_id(url=f"api/users/{user.user_id}", org_id=org_id,
+                                                               body=user_body)
+            log.info('user updated', extra={'org_id': org_id, 'data': user_body, 'status': response})
+
+        status, response = self._patch_by_admin_using_org_id(url=f"api/org/users/{user.user_id}", org_id=org_id,
+                                                             body={'role': user.role})
+        log.info('user role updated', extra={'org_id': org_id, 'data': user_body, 'status': response})
         return status
 
     def _add_admin_permissions(self, user_ids: Set[str]):
@@ -471,7 +507,7 @@ class GrafanaConnection(GrafanaAPI):
             page = 1
             per_page = 1000
             while True:
-                result = self._get_by_admin(f"api/users?perpage={per_page}&page={page}")
+                _, result = self._get_by_admin(f"api/users?perpage={per_page}&page={page}")
                 for entry in result:
                     self.global_users[entry['login']] = entry
                     if 'isAdmin' in entry and entry['isAdmin']:
@@ -482,10 +518,10 @@ class GrafanaConnection(GrafanaAPI):
                 page = page + 1
 
         # Get all organisations
-        all_orgs = self._get_by_admin('api/orgs')
+        _, all_orgs = self._get_by_admin('api/orgs')
 
         for org in all_orgs:
-            if org['id'] == 1:
+            if org['id'] == 1 and not strtobool(os.getenv(GONB_GRAFANA_MAIN_ORG, 'FALSE')):
                 # Do not include the Main org, 1
                 continue
             # Create organization and add apikey
@@ -624,6 +660,7 @@ class GrafanaTeam(GrafanaConnection):
         for organisation_name, organisation in self.organisations_by_organisation_name.items():
             # {'totalCount': 0, 'teams': [], 'page': 1, 'perPage': 1000}
 
+            # Get all folders and team data an update organisation object
             folders_by_organisation_name[organisation_name] = self._get_all_folders(organisation)
             self._get_all_teams(organisation, folders_by_organisation_name[organisation_name])
 
@@ -663,14 +700,14 @@ class GrafanaTeam(GrafanaConnection):
         # TODO enterprise
         if team.sync_groups_id:
             body = {'groupId': team.sync_groups_id}
-            response = self._post_by_admin_using_orgid(f"api/teams/{team.team_id}/groups", body=body,
-                                                       org_id=organisation.org_id)
+            self._post_by_admin_using_org_id(f"api/teams/{team.team_id}/groups", body=body,
+                                             org_id=organisation.org_id)
 
     def _add_team_roles(self, organisation: Organization, team: Team):
         # TODO enterprise
         body = {'roleUids': self._role_name_to_uid(team.access_control.values())}
-        self._put_by_admin_using_orgid(f"/api/access-control/teams/{team.team_id}/roles", body=body,
-                                       org_id=organisation.org_id)
+        self._put_by_admin_using_org_id(f"/api/access-control/teams/{team.team_id}/roles", body=body,
+                                        org_id=organisation.org_id)
 
     def _role_name_to_uid(self, roles: List[str]) -> List[str]:
         uids: List[str] = []
@@ -685,7 +722,7 @@ class GrafanaTeam(GrafanaConnection):
     def _add_team_and_members(self, organisation: Organization, team: Team) -> Team:
         # Create team
         body = {'name': team.name, 'org_id': team.org_id}
-        response = self._post_by_admin_using_orgid('api/teams', body=body, org_id=team.org_id)
+        status, response = self._post_by_admin_using_org_id('api/teams', body=body, org_id=team.org_id)
         if 'teamId' not in response:
             log.warning('team add failed ', extra={'organization': organisation.organisation_name, 'team': team.name,
                                                    'error': f"{response['message']}"})
@@ -716,12 +753,12 @@ class GrafanaTeam(GrafanaConnection):
             sync_groups_add = set(organisation.teams[iam_team.name].sync_groups_id) - set(iam_team.sync_groups_id)
             if sync_groups_add:
                 body = {'groupId': [sync_groups_add]}
-                response = self._post_by_admin_using_orgid(
+                self._post_by_admin_using_org_id(
                     f"/api/teams/{organisation.teams[iam_team.name].team_id}/groups", body=body,
                     org_id=organisation.org_id)
             if sync_groups_del:
                 for sync_group in sync_groups_del:
-                    response = self._delete_by_admin_using_orgid(
+                    self._delete_by_admin_using_orgid(
                         f"/api/teams/{organisation.teams[iam_team.name].team_id}/groups/{sync_group}",
                         org_id=organisation.org_id)
 
@@ -743,7 +780,7 @@ class GrafanaTeam(GrafanaConnection):
         for member in members_to_add:
             if member in organisation.users.keys():
                 body = {'userId': organisation.users[member].user_id}
-                self._post_by_admin_using_orgid(
+                self._post_by_admin_using_org_id(
                     f"api/teams/{organisation.teams[iam_team.name].team_id}/members",
                     body=body,
                     org_id=organisation.org_id)
@@ -769,8 +806,8 @@ class GrafanaTeam(GrafanaConnection):
                 # Add existing members to the team
 
                 body = {'userId': organisation.users[member].user_id}
-                self._post_by_admin_using_orgid(f"api/teams/{team.team_id}/members", body=body,
-                                                org_id=team.org_id)
+                self._post_by_admin_using_org_id(f"api/teams/{team.team_id}/members", body=body,
+                                                 org_id=team.org_id)
                 log.info('team user add', extra={'organization': organisation.organisation_name,
                                                  'team': team.name, 'member': member})
 
@@ -780,19 +817,20 @@ class GrafanaTeam(GrafanaConnection):
                                                            'error': f"member do not exist as a user"})
 
     def _add_team_folder(self, organisation: Organization, team: Team):
-        folders_data = self._get_by_admin_using_orgid("api/folders", org_id=team.org_id)
-        folder_titles = self._list_of_dict_values(folders_data, 'title')
+        #_, folders_data = self._get_by_admin_using_org_id("api/folders", org_id=team.org_id)
+        #folder_titles = self._list_of_dict_values(folders_data, 'title')
 
-        if team.name not in folder_titles:
+        #if team.name not in folder_titles:
+        if team.name not in organisation.folders.keys():
             # Create Folder
             body = {'title': team.name}
-            response = self._post_by_admin_using_orgid(f"api/folders", body=body, org_id=team.org_id)
+            status, response = self._post_by_admin_using_org_id(f"api/folders", body=body, org_id=team.org_id)
             if response['uid']:
-                folder_data = self._get_by_admin_using_orgid(f"api/folders/{response['uid']}", org_id=team.org_id)
+                _, folder_data = self._get_by_admin_using_org_id(f"api/folders/{response['uid']}", org_id=team.org_id)
                 folder = folder_factory(folder_data)
 
                 # Get existing permissions before update
-                permissions_data = self._get_by_admin(f"api/folders/{folder.uid}/permissions")
+                _, permissions_data = self._get_by_admin(f"api/folders/{folder.uid}/permissions")
                 for permission_data in permissions_data:
                     permission = permission_factory(permission_data)
                     folder.permissions.append(permission)
@@ -800,9 +838,26 @@ class GrafanaTeam(GrafanaConnection):
                 team_folder_permission = folder.formatted_permissions()
                 team_folder_permission.append({'teamId': team.team_id, 'permission': 2})
                 body = {'items': team_folder_permission}
-                self._post_by_admin_using_orgid(f"api/folders/{folder.uid}/permissions", body=body, org_id=team.org_id)
+                self._post_by_admin_using_org_id(f"api/folders/{folder.uid}/permissions", body=body, org_id=team.org_id)
                 log.info('team folder add', extra={'organization': organisation.organisation_name,
                                                    'team': team.name, 'folder': folder.title})
+        elif team.name in organisation.folders.keys():
+            # If the folder with team name exist check that team has editor permission, if not update the folder
+            # permission
+            folder = organisation.folders[team.name]
+            team_has_permission = False
+            for permission in folder.permissions:
+                if isinstance(permission, PermissionTeam) and permission.team_id == team.team_id and \
+                        permission.permission == 2:
+                    team_has_permission = True
+                    break
+            if not team_has_permission:
+                team_folder_permission = folder.formatted_permissions()
+                team_folder_permission.append({'teamId': team.team_id, 'permission': 2})
+                body = {'items': team_folder_permission}
+                self._post_by_admin_using_org_id(f"api/folders/{folder.uid}/permissions", body=body, org_id=team.org_id)
+                log.info('team folder permission updated', extra={'organization': organisation.organisation_name,
+                                                                  'team': team.name, 'folder': folder.title})
 
     def _update_teams_folder(self, organisation: Organization, iam_team: Team):
         team = organisation.teams[iam_team.name]
@@ -822,8 +877,8 @@ class GrafanaTeam(GrafanaConnection):
                 update_permission = team.folder.formatted_permissions()
                 update_permission.append({'teamId': team.team_id, 'permission': 2})
                 body = {'items': update_permission}
-                self._post_by_admin_using_orgid(f"api/folders/{team.folder.uid}/permissions", body=body,
-                                                org_id=organisation.org_id)
+                self._post_by_admin_using_org_id(f"api/folders/{team.folder.uid}/permissions", body=body,
+                                                 org_id=organisation.org_id)
 
                 log.info('team folder updated permission', extra={'organization': organisation.organisation_name,
                                                                   'team': iam_team.name, 'folder': iam_team.name})
@@ -835,7 +890,7 @@ class GrafanaTeam(GrafanaConnection):
         :param folders:
         :return:
         """
-        teams_data = self._get_by_api_key(f"api/teams/search", api_key=organisation.api_key)
+        _, teams_data = self._get_by_api_key(f"api/teams/search", api_key=organisation.api_key)
         if 'teams' not in teams_data:
             return
         for team_data in teams_data['teams']:
@@ -845,7 +900,7 @@ class GrafanaTeam(GrafanaConnection):
             if team.name in folders.keys():
                 team.folder = folders[team.name]
             if team_data['memberCount'] != 0:
-                member_data = self._get_by_api_key(f"api/teams/{team.team_id}/members", api_key=organisation.api_key)
+                _, member_data = self._get_by_api_key(f"api/teams/{team.team_id}/members", api_key=organisation.api_key)
                 for member in member_data:
                     # Always exclude admin
                     if member['login'] != 'admin' and member['login'] != self.username:
@@ -860,11 +915,40 @@ class GrafanaTeam(GrafanaConnection):
         folders_by_uid: Dict[str, Folder] = {}
         folders_by_title: Dict[str, Folder] = {}
         # Search in top folder
-        folders_data = self._get_by_api_key('api/search?folderIds=0&type=dash-folder', api_key=organisation.api_key)
+        _, folders_data = self._get_by_api_key('api/search?folderIds=0&type=dash-folder', api_key=organisation.api_key)
         for folder_data in folders_data:
             folder = folder_factory(folder_data)
-            permissions_data = self._get_by_api_key(f"api/folders/{folder.uid}/permissions",
-                                                    api_key=organisation.api_key)
+            _, permissions_data = self._get_by_api_key(f"api/folders/{folder.uid}/permissions",
+                                                       api_key=organisation.api_key)
+            for permission_data in permissions_data:
+                permission = permission_factory(permission_data)
+                folder.permissions.append(permission)
+
+            organisation.folders[folder.title] = folder
+            folders_by_uid[folder.uid] = folder
+
+        for folder in folders_by_uid.values():
+            if folder.title not in folders_by_title:
+                folders_by_title[folder.title] = folder
+            else:
+                raise GrafanaException(f"Folder title already exists {folder.title}")
+
+        return folders_by_title
+
+    def _get_all_folders_OLD(self, organisation: Organization) -> Dict[str, Folder]:
+        """
+        Get all existing folders related to an organisation.
+        :param organisation:
+        :return:
+        """
+        folders_by_uid: Dict[str, Folder] = {}
+        folders_by_title: Dict[str, Folder] = {}
+        # Search in top folder
+        _, folders_data = self._get_by_api_key('api/search?folderIds=0&type=dash-folder', api_key=organisation.api_key)
+        for folder_data in folders_data:
+            folder = folder_factory(folder_data)
+            _, permissions_data = self._get_by_api_key(f"api/folders/{folder.uid}/permissions",
+                                                       api_key=organisation.api_key)
             for permission_data in permissions_data:
                 permission = permission_factory(permission_data)
                 folder.permissions.append(permission)
@@ -909,7 +993,9 @@ def provision(iam_organisations: Dict[str, OrganizationDTO]):
     """
     # Transform DTO object to Grafana objects
     organisations: Dict[str, Organization] = _dto_to_organisations(iam_organisations)
-
+    if not strtobool(os.getenv(GONB_GRAFANA_MAIN_ORG, 'FALSE')):
+        del organisations[MAIN_ORG]
+        log.warning(f"Try to manage Main Org. but not allowed. Set env {GONB_GRAFANA_MAIN_ORG} to true")
     # Provision Grafana organisations and organisation users
     grafana_users = GrafanaUser()
     grafana_users.provision(organisations)
