@@ -18,6 +18,7 @@ from typing import Dict, Set
 
 from gonb.user import User
 from gonb.team import Team
+from gonb.folder import Folder
 
 
 class Organization:
@@ -27,6 +28,7 @@ class Organization:
         self.api_key: str = ''
         self.users: Dict[str, User] = {}
         self.teams: Dict[str, Team] = {}
+        self.folders: Dict[str, Folder] = {}
 
     def __str__(self):
         return json.dumps(
