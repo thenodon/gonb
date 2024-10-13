@@ -44,6 +44,9 @@ GONB_SSO_PROVIDER = 'GONB_SSO_PROVIDER'
 GONB_GRAFANA_MAIN_ORG = 'GONB_GRAFANA_MAIN_ORG'
 
 MAIN_ORG = 'Main Org.'
+ADMIN = 'Admin'
+EDITOR = 'Editor'
+VIEWER = 'Viewer'
 
 env_vars = {GONB_GRAFANA_URL: 'The grafana server url',
             GONB_GRAFANA_USER: 'A grafana user with admin permission',
@@ -336,7 +339,7 @@ class GrafanaAPI:
             # Delete it first
             self._delete_by_admin(url=f"api/auth/keys/{key_id}")
 
-        _, api_key = self._post_by_admin(url=f"api/auth/keys", body={'name': GONB_APIKEY, 'role': 'Admin'})
+        _, api_key = self._post_by_admin(url=f"api/auth/keys", body={'name': GONB_APIKEY, 'role': ADMIN})
         return api_key['key']
 
     @staticmethod
@@ -435,7 +438,7 @@ class GrafanaConnection(GrafanaAPI):
             user_id = response['id']
             log.info('user created', extra={'org_id': org_id, 'status': response})
 
-            if user.role and (user.role == 'Editor' or user.role == 'Admin'):
+            if user.role and (user.role == EDITOR or user.role == ADMIN):
                 # Add the role specific to the organisation
                 status, response = self._patch_by_admin_using_org_id(url=f"api/org/users/{user_id}", org_id=org_id,
                                                                      body={'role': user.role})
@@ -993,7 +996,7 @@ def provision(iam_organisations: Dict[str, OrganizationDTO]):
     """
     # Transform DTO object to Grafana objects
     organisations: Dict[str, Organization] = _dto_to_organisations(iam_organisations)
-    if not strtobool(os.getenv(GONB_GRAFANA_MAIN_ORG, 'FALSE')):
+    if not strtobool(os.getenv(GONB_GRAFANA_MAIN_ORG, 'FALSE')) and MAIN_ORG in organisations:
         del organisations[MAIN_ORG]
         log.warning(f"Try to manage Main Org. but not allowed. Set env {GONB_GRAFANA_MAIN_ORG} to true")
     # Provision Grafana organisations and organisation users
