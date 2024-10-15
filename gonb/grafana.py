@@ -194,6 +194,11 @@ class GrafanaAPI:
             r = requests.patch(f"{self.base_url}/{url}", headers=self.headers, auth=(self.username, self.password),
                                verify=False, data=json.dumps(body))
             if r.status_code != 200:
+                if r.status_code == 403:
+                    if "externallySynced" in r.text:
+                        log.warning('grafana api failed status', extra={'method': 'PATCH', 'url': url, 'status': r.status_code,
+                                                              'error': r.text})
+                        return r.status_code, r.json()
                 log.error('grafana api failed status', extra={'method': 'PATCH', 'url': url, 'status': r.status_code,
                                                               'error': r.text})
                 raise GrafanaException(message=f"PATCH - Status code for {self.base_url}/{url} was {r.status_code}")
