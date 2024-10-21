@@ -480,10 +480,12 @@ class GrafanaConnection(GrafanaAPI):
             status, response = self._put_by_admin_using_org_id(url=f"api/users/{user.user_id}", org_id=org_id,
                                                                body=user_body)
             log.info('user updated', extra={'org_id': org_id, 'data': user_body, 'status': response})
+        else:
+            log.info('user updated not possible since SSO managed', extra={'org_id': org_id, 'data': user_body})
 
         status, response = self._patch_by_admin_using_org_id(url=f"api/org/users/{user.user_id}", org_id=org_id,
                                                              body={'role': user.role})
-        log.info('user role updated', extra={'org_id': org_id, 'data': user_body, 'status': response})
+        #log.info('user role updated', extra={'org_id': org_id, 'data': user_body, 'status': response})
         return status
 
     def _add_admin_permissions(self, user_ids: Set[str]):
@@ -649,6 +651,145 @@ class GrafanaUser(GrafanaConnection):
 
         return added_users
 
+class GrafanaFolder(GrafanaConnection):
+    def __init__(self):
+        super().__init__()
+
+    def provision(self, iam_organisations: Dict[str, Organization]):
+        """
+        Provision and manage folder include the following logic:
+        - A Folder must have at least one team
+        - The Team must exists
+        :param iam_organisations:
+        :return:
+        """
+        teamObj = GrafanaTeam()
+        folders_by_organisation_name = {}
+        for organisation_name, organisation in teamObj.organisations_by_organisation_name.items():
+            # {'totalCount': 0, 'teams': [], 'page': 1, 'perPage': 1000}
+
+            # Get all folders and team data an update organisation object
+            folders_by_organisation_name[organisation_name] = teamObj._get_all_folders(organisation)
+            teamObj._get_all_teams(organisation, folders_by_organisation_name[organisation_name])
+
+        # For all organisations create and/or update folders
+        for organisation_name, organisation in teamObj.organisations_by_organisation_name.items():
+            # All existing teams for organization
+            _, teams_data = self._get_by_api_key(f"api/teams/search", api_key=organisation.api_key)
+            if 'teams' not in teams_data:
+                return
+
+            # Get all existing teams and map it to team id for the organization
+            team_uid: Dict[str,str] = {}
+            for team_data in teams_data['teams']:
+                team_uid[team_data['name']] = team_data['id']
+
+            # Get all folders that should be configured
+            valid_folders = {}
+            for a_folder_name, a_folder in iam_organisations[organisation_name].folders.items():
+                # For all folders to manage check if the team exists i Grafana - if not skip
+                folder = Folder()
+                folder.title = a_folder_name
+                for a_team in a_folder.permissions:
+                    if a_team.team not in team_uid.keys():
+                        log.warning('team do not exist',
+                                    extra={'organization': organisation_name, 'team': a_team.team, 'folder': a_folder_name})
+                        continue
+                    else:
+                        permission = PermissionTeam()
+                        #permission.uid = team_uid[a_team.team]
+                        permission.permission = a_team.permission
+                        #permission.inherited = permission_data['inherited']
+
+                        permission.team_id = team_uid[a_team.team]
+                        permission.team = a_team.team
+
+                        folder.permissions.append(permission)
+                        # check if folder exist
+                        # if not create it and add team to it
+                        # if the folder exists add team, but do not remove any team that is not part of the list
+                        # if the team exists it will just do nothing
+
+                        # if the folder do note exists create it
+                if a_folder_name not in folders_by_organisation_name[organisation_name].keys():
+                    self._add_folder(organisation, folder)
+                else: # if the folder exists
+                    folder.uid = folders_by_organisation_name[organisation_name][folder.title].uid
+                    folder.folder_id = folders_by_organisation_name[organisation_name][folder.title].folder_id
+                    self._update_folder(organisation, folder)
+
+        return
+
+    def _add_folder(self, organisation: Organization, folder_new: Folder):
+        # Create Folder
+        body = {'title': folder_new.title}
+        status, response = self._post_by_admin_using_org_id(f"api/folders", body=body, org_id=organisation.org_id)
+        if response['uid']:
+            _, folder_data = self._get_by_admin_using_org_id(f"api/folders/{response['uid']}", org_id=organisation.org_id)
+            folder = folder_factory(folder_data)
+
+            # Get existing permissions before update
+            _, permissions_data = self._get_by_admin(f"api/folders/{folder.uid}/permissions")
+            for permission_data in permissions_data:
+                permission = permission_factory(permission_data)
+                folder.permissions.append(permission)
+
+            for permission in folder_new.permissions:
+                if permission.team_id not in folder.formatted_permissions():
+                    folder.permissions.append(permission)
+
+            body = {'items': folder.formatted_permissions()}
+            self._post_by_admin_using_org_id(f"api/folders/{folder.uid}/permissions", body=body, org_id=organisation.org_id)
+            log.info('folder add', extra={'organization': organisation.organisation_name,
+                                               'folder': folder.title})
+        # elif team.name in organisation.folders.keys():
+        #     # If the folder with team name exist check that team has editor permission, if not update the folder
+        #     # permission
+        #     folder = organisation.folders[team.name]
+        #     team_has_permission = False
+        #     for permission in folder.permissions:
+        #         if isinstance(permission, PermissionTeam) and permission.team_id == team.team_id and \
+        #                 permission.permission == 2:
+        #             team_has_permission = True
+        #             break
+        #     if not team_has_permission:
+        #         team_folder_permission = folder.formatted_permissions()
+        #         team_folder_permission.append({'teamId': team.team_id, 'permission': 2})
+        #         body = {'items': team_folder_permission}
+        #         self._post_by_admin_using_org_id(f"api/folders/{folder.uid}/permissions", body=body, org_id=team.org_id)
+        #         log.info('team folder permission updated', extra={'organization': organisation.organisation_name,
+        #                                                           'team': team.name, 'folder': folder.title})
+
+    def _update_folder(self, organisation: Organization, update_folder: Folder):
+
+        # Get existing permissions before update
+        _, permissions_data = self._get_by_admin(f"api/folders/{update_folder.uid}/permissions")
+
+        current_permissions = []
+        current_team_permission = {}
+
+        for permission_data in permissions_data:
+            permission = permission_factory(permission_data)
+            current_permissions.append(permission)
+            if isinstance(permission, PermissionTeam):
+                current_team_permission[permission.team] = permission
+
+        is_updated = False
+        for permission in update_folder.permissions:
+            if not isinstance(permission, PermissionTeam):
+                continue
+            if permission.team not in current_team_permission:
+                is_updated = True
+                current_permissions.append(permission)
+
+        if is_updated:
+            dummy_folder = Folder()
+            dummy_folder.permissions = current_permissions
+
+            body = {'items': dummy_folder.formatted_permissions()}
+            self._post_by_admin_using_org_id(f"api/folders/{update_folder.uid}/permissions", body=body, org_id=organisation.org_id)
+            log.info('folder updated permission', extra={'organization': organisation.organisation_name,
+                                                              'folder': update_folder.title})
 
 class GrafanaTeam(GrafanaConnection):
     def __init__(self):
@@ -1012,6 +1153,10 @@ def provision(iam_organisations: Dict[str, OrganizationDTO]):
     grafana_teams = GrafanaTeam()
     grafana_teams.provision(organisations)
 
+    # Provision Grafana folders
+    grafana_folders = GrafanaFolder()
+    grafana_folders.provision(organisations)
+
     # Provision Grafana admin users
     if strtobool(os.getenv(GONB_GRAFANA_ADMINS, 'FALSE')):
         admins: Dict[str, AdminUsers] = _dto_to_admins(iam_organisations)
@@ -1062,5 +1207,17 @@ def _dto_to_organisations(iam_organisations) -> Dict[str, Organization]:
             team.avatar_url = team_dto.avatar_url
             team.members = team_dto.members
             organisation.teams[team.name] = team
+
+        for folder_name, folder_dto in organisation_dto.folders.items():
+            folder = Folder()
+            folder.title = folder_dto.name
+            #folder.uid = folder_dto.uid
+            for team in folder_dto.teams:
+                permission = PermissionTeam()
+                permission.team = team
+                permission.permission = folder_dto.team_permission
+                folder.permissions.append(permission)
+
+            organisation.folders[folder.title] = folder
 
     return organisations

@@ -15,6 +15,12 @@
 
 from typing import Dict, List
 
+class FolderDTO:
+    def __init__(self, name):
+        # Folder name
+        self.name = name
+        self.teams: List[str] = []
+        self.team_permission = 2
 
 class UserDTO:
     def __init__(self, login_name: str):
@@ -48,3 +54,6 @@ class OrganizationDTO:
         self.users: Dict[str, UserDTO] = {}
         # List of teams
         self.teams: Dict[str, TeamDTO] = {}
+        # List of folders
+        self.folders: Dict[str, FolderDTO] = {}
+
