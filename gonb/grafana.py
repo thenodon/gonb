@@ -42,6 +42,7 @@ GONB_GRAFANA_CREATE_ORGS = 'GONB_GRAFANA_CREATE_ORGS'
 GONB_GRAFANA_ADMINS = 'GONB_GRAFANA_ADMINS'
 GONB_SSO_PROVIDER = 'GONB_SSO_PROVIDER'
 GONB_GRAFANA_MAIN_ORG = 'GONB_GRAFANA_MAIN_ORG'
+GONB_GRAFANA_TEAM_FOLDER = 'GONB_GRAFANA_TEAM_FOLDER'
 
 MAIN_ORG = 'Main Org.'
 ADMIN = 'Admin'
@@ -83,7 +84,8 @@ class GrafanaAPI:
         :param url:
         :return:
         """
-        valid_status.extend([200])
+        if 200 not in valid_status:
+            valid_status.extend([200])
         try:
             r = requests.get(f"{self.base_url}/{url}", headers=self.headers, auth=(self.username, self.password),
                              verify=False)
@@ -115,7 +117,8 @@ class GrafanaAPI:
         :param body:
         :return:
         """
-        valid_status.extend([200])
+        if 200 not in valid_status:
+            valid_status.extend([200])
         if body is None:
             body = {}
         try:
@@ -196,7 +199,7 @@ class GrafanaAPI:
             if r.status_code != 200:
                 if r.status_code == 403:
                     if "externallySynced" in r.text:
-                        log.warning('grafana api failed status', extra={'method': 'PATCH', 'url': url, 'status': r.status_code,
+                        log.info('grafana api failed status', extra={'method': 'PATCH', 'url': url, 'status': r.status_code,
                                                               'error': r.text})
                         return r.status_code, r.json()
                 log.error('grafana api failed status', extra={'method': 'PATCH', 'url': url, 'status': r.status_code,
@@ -253,7 +256,8 @@ class GrafanaAPI:
         :param api_key:
         :return:
         """
-        valid_status.extend([200])
+        if 200 not in valid_status:
+            valid_status.extend([200])
         headers = dict(self.headers)
         headers['Authorization'] = f"Bearer {api_key}"
 
@@ -273,10 +277,11 @@ class GrafanaAPI:
         """
         Do a GET with apikey
         :param url:
-        :param api_key:
+        :param api_key:timeout=5
         :return:
         """
-        valid_status.extend([200])
+        if 200 not in valid_status:
+            valid_status.extend([200])
         headers = dict(self.headers)
         headers['Authorization'] = f"Bearer {api_key}"
 
@@ -348,7 +353,7 @@ class GrafanaAPI:
         return api_key['key']
 
     @staticmethod
-    def _find_api_key_id_by_name(existing_api_keys: List[Dict[str, Any]], key_name: str) -> int:
+    def _find_api_key_id_by_name(existing_api_keys: List[Dict[str, Any]], key_name: str) -> Any | None:
         for api_key in existing_api_keys:
             if api_key['name'] == key_name:
                 return api_key['id']
@@ -462,7 +467,7 @@ class GrafanaConnection(GrafanaAPI):
                 raise err
         return response
 
-    def _update_user_to_organisation(self, user: User, org_id: int):
+    def _update_user_to_organisation(self, user: User, org_id: int) -> int:
         """
         Remove a user from an organisation
         :param user:
@@ -475,17 +480,15 @@ class GrafanaConnection(GrafanaAPI):
             'email': user.email,
             'role': user.role
         }
-
+        status = 200
         if not self.is_sso_provider:
             status, response = self._put_by_admin_using_org_id(url=f"api/users/{user.user_id}", org_id=org_id,
                                                                body=user_body)
             log.info('user updated', extra={'org_id': org_id, 'data': user_body, 'status': response})
+            return status
         else:
-            log.info('user updated not possible since SSO managed', extra={'org_id': org_id, 'data': user_body})
+            log.debug('user update not possible since SSO managed', extra={'org_id': org_id, 'data': user_body})
 
-        status, response = self._patch_by_admin_using_org_id(url=f"api/org/users/{user.user_id}", org_id=org_id,
-                                                             body={'role': user.role})
-        #log.info('user role updated', extra={'org_id': org_id, 'data': user_body, 'status': response})
         return status
 
     def _add_admin_permissions(self, user_ids: Set[str]):
@@ -598,6 +601,9 @@ class GrafanaUser(GrafanaConnection):
             -> List[User]:
 
         update_users = []
+        if self.is_sso_provider:
+            log.info('user update not possible since SSO managed', extra={'org_id': organisation_name})
+            return update_users
         for user_name in user_names:
 
             if user_name in iam_organisations[organisation_name].users:
@@ -697,26 +703,21 @@ class GrafanaFolder(GrafanaConnection):
                         continue
                     else:
                         permission = PermissionTeam()
-                        #permission.uid = team_uid[a_team.team]
                         permission.permission = a_team.permission
-                        #permission.inherited = permission_data['inherited']
 
                         permission.team_id = team_uid[a_team.team]
                         permission.team = a_team.team
 
                         folder.permissions.append(permission)
-                        # check if folder exist
-                        # if not create it and add team to it
-                        # if the folder exists add team, but do not remove any team that is not part of the list
-                        # if the team exists it will just do nothing
+                        valid_folders[a_folder_name] = folder
 
-                        # if the folder do note exists create it
-                if a_folder_name not in folders_by_organisation_name[organisation_name].keys():
-                    self._add_folder(organisation, folder)
-                else: # if the folder exists
-                    folder.uid = folders_by_organisation_name[organisation_name][folder.title].uid
-                    folder.folder_id = folders_by_organisation_name[organisation_name][folder.title].folder_id
-                    self._update_folder(organisation, folder)
+        for a_folder_name, a_folder in valid_folders.items():
+            if a_folder_name not in folders_by_organisation_name[organisation_name].keys():
+                self._add_folder(organisation, a_folder)
+            else: # if the folder exists
+                a_folder.folder_uid = folders_by_organisation_name[organisation_name][a_folder.title].uid
+                a_folder.folder_id = folders_by_organisation_name[organisation_name][a_folder.title].folder_id
+                self._update_folder(organisation, a_folder)
 
         return
 
@@ -742,28 +743,12 @@ class GrafanaFolder(GrafanaConnection):
             self._post_by_admin_using_org_id(f"api/folders/{folder.uid}/permissions", body=body, org_id=organisation.org_id)
             log.info('folder add', extra={'organization': organisation.organisation_name,
                                                'folder': folder.title})
-        # elif team.name in organisation.folders.keys():
-        #     # If the folder with team name exist check that team has editor permission, if not update the folder
-        #     # permission
-        #     folder = organisation.folders[team.name]
-        #     team_has_permission = False
-        #     for permission in folder.permissions:
-        #         if isinstance(permission, PermissionTeam) and permission.team_id == team.team_id and \
-        #                 permission.permission == 2:
-        #             team_has_permission = True
-        #             break
-        #     if not team_has_permission:
-        #         team_folder_permission = folder.formatted_permissions()
-        #         team_folder_permission.append({'teamId': team.team_id, 'permission': 2})
-        #         body = {'items': team_folder_permission}
-        #         self._post_by_admin_using_org_id(f"api/folders/{folder.uid}/permissions", body=body, org_id=team.org_id)
-        #         log.info('team folder permission updated', extra={'organization': organisation.organisation_name,
-        #                                                           'team': team.name, 'folder': folder.title})
+
 
     def _update_folder(self, organisation: Organization, update_folder: Folder):
 
         # Get existing permissions before update
-        _, permissions_data = self._get_by_admin(f"api/folders/{update_folder.uid}/permissions")
+        _, permissions_data = self._get_by_admin(f"api/folders/{update_folder.folder_uid}/permissions")
 
         current_permissions = []
         current_team_permission = {}
@@ -787,7 +772,7 @@ class GrafanaFolder(GrafanaConnection):
             dummy_folder.permissions = current_permissions
 
             body = {'items': dummy_folder.formatted_permissions()}
-            self._post_by_admin_using_org_id(f"api/folders/{update_folder.uid}/permissions", body=body, org_id=organisation.org_id)
+            self._post_by_admin_using_org_id(f"api/folders/{update_folder.folder_uid}/permissions", body=body, org_id=organisation.org_id)
             log.info('folder updated permission', extra={'organization': organisation.organisation_name,
                                                               'folder': update_folder.title})
 
@@ -966,10 +951,9 @@ class GrafanaTeam(GrafanaConnection):
                                                            'error': f"member do not exist as a user"})
 
     def _add_team_folder(self, organisation: Organization, team: Team):
-        #_, folders_data = self._get_by_admin_using_org_id("api/folders", org_id=team.org_id)
-        #folder_titles = self._list_of_dict_values(folders_data, 'title')
+        if not strtobool(os.getenv(GONB_GRAFANA_TEAM_FOLDER, 'True')):
+            return
 
-        #if team.name not in folder_titles:
         if team.name not in organisation.folders.keys():
             # Create Folder
             body = {'title': team.name}
@@ -1164,6 +1148,21 @@ def provision(iam_organisations: Dict[str, OrganizationDTO]):
         grafana_admins = GrafanaAdmin()
         grafana_admins.provision(admins, organisations)
 
+def provision_folders(iam_organisations: Dict[str, OrganizationDTO]):
+    """
+    Execute on the source IAM based organisation
+    :param iam_organisations:
+    :return:
+    """
+    # Transform DTO object to Grafana objects
+    organisations: Dict[str, Organization] = _dto_to_organisations(iam_organisations)
+    if not strtobool(os.getenv(GONB_GRAFANA_MAIN_ORG, 'FALSE')) and MAIN_ORG in organisations:
+        del organisations[MAIN_ORG]
+        log.warning(f"Try to manage Main Org. but not allowed. Set env {GONB_GRAFANA_MAIN_ORG} to true")
+
+    # Provision Grafana folders
+    grafana_folders = GrafanaFolder()
+    grafana_folders.provision(organisations)
 
 def _dto_to_admins(iam_organisations) -> Dict[str, AdminUsers]:
     """
