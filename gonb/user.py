@@ -35,6 +35,7 @@ class User:
         self.password = password
         if not self.password:
             self.password = create_random_string()
+        self.external_auth: bool = False
 
     def __str__(self):
         return json.dumps(
@@ -70,4 +71,7 @@ class User:
         user.email = grafana_user_profile['email']
         user.role = grafana_user_profile['role']
         user.user_id = grafana_user_profile['userId']
+        if 'authLabels' in grafana_user_profile and grafana_user_profile['authLabels'] is not None:
+            user.external_auth = True
+
         return user
