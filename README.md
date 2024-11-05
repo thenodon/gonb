@@ -51,6 +51,7 @@ For the grafana integration the following 3 must exist and have valid values, th
 - GONB_GRAFANA_CREATE_ORGS - Will create organization(s) if not exists, default `False`
 - GONB_GRAFANA_ADMINS - will manage users Grafana admin rights, default `False`
 - GONB_GRAFANA_MAIN_ORG - allow management of Grafana `Main Org.`, default `False`
+- GONB_GRAFANA_TEAM_FOLDER - create team folder, default `True` 
 - GONB_SSO_PROVIDER - specify if the provider is based on a IAM used for Grafana authentication, default `True`.
 
 > If `GONB_SSO_PROVIDER` is True there is some updating operations that are not done by gonb, e.g. update a 
