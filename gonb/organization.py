@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import json
+import logging as log
 from typing import Dict, Set
 
 from gonb.user import User
@@ -56,6 +57,11 @@ class DiffUsers:
         del_users = self.grafana_users_idx[organisation_name] - self.iam_users_idx[organisation_name]
         if self.exclude_user in del_users:
             del_users.remove(self.exclude_user)
+        # Exclude users from grafana that have external auth
+        for user_name in del_users:
+            if self._grafana_orgs[organisation_name].users[user_name].external_auth:
+                log.info("exclude delete of user due to external SSO", extra={'organization': organisation_name, 'user': user_name})
+                self._grafana_orgs[organisation_name].users.pop(user_name)
         return del_users
 
     def update(self, organisation_name: str) -> Set[str]:
