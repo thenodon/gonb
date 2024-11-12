@@ -342,19 +342,24 @@ class GrafanaAPI:
                             'status': status})
 
         self._post_by_admin(url=f"api/user/using/{organization.org_id}")
-        # Get all existing
-        _, existing_api_keys = self._get_by_admin(url=f"api/auth/keys")
-        key_id = GrafanaAPI._find_api_key_id_by_name(existing_api_keys, GONB_APIKEY)
-        if key_id:
-            # Delete it first
-            self._delete_by_admin(url=f"api/auth/keys/{key_id}")
-
-        _, api_key = self._post_by_admin(url=f"api/auth/keys", body={'name': GONB_APIKEY, 'role': ADMIN})
+        # Get all existing AHA
+        status, existing_api_keys = self._get_by_admin(url=f"api/serviceaccounts/search?perpage=10&page=1&query={GONB_APIKEY}", valid_status=[200, 404])
+        if status == 200 and existing_api_keys['totalCount'] > 0:
+            #_, existing_api_keys = self._get_by_admin(url=f"api/auth/keys")
+            key_id = GrafanaAPI._find_api_key_id_by_name(existing_api_keys, GONB_APIKEY)
+            if key_id:
+                # Delete it first
+                #self._delete_by_admin(url=f"api/auth/keys/{key_id}")
+                self._delete_by_admin(url=f"api/serviceaccounts/{key_id}")
+        _, service_account = self._post_by_admin(url=f"api/serviceaccounts", body={'name': GONB_APIKEY, 'role': ADMIN}, valid_status=[201])
+        service_account_id = service_account['id']
+        #_, api_key = self._post_by_admin(url=f"api/auth/keys", body={'name': GONB_APIKEY, 'role': ADMIN})
+        _, api_key = self._post_by_admin(url=f"api/serviceaccounts/{service_account_id}/tokens", body={'name': f"{GONB_APIKEY}-token"})
         return api_key['key']
 
     @staticmethod
     def _find_api_key_id_by_name(existing_api_keys: List[Dict[str, Any]], key_name: str) -> Any | None:
-        for api_key in existing_api_keys:
+        for api_key in existing_api_keys['serviceAccounts']:
             if api_key['name'] == key_name:
                 return api_key['id']
         return None
@@ -696,6 +701,10 @@ class GrafanaFolder(GrafanaConnection):
                 # For all folders to manage check if the team exists i Grafana - if not skip
                 folder = Folder()
                 folder.title = a_folder_name
+                if a_folder.is_subfolder:
+                    folder.is_subfolder = a_folder.is_subfolder
+                    folder.parent_folder_title = a_folder.parent_folder_title
+
                 for a_team in a_folder.permissions:
                     if a_team.team not in team_uid.keys():
                         log.warning('team do not exist',
@@ -712,6 +721,8 @@ class GrafanaFolder(GrafanaConnection):
                         valid_folders[a_folder_name] = folder
 
         for a_folder_name, a_folder in valid_folders.items():
+            if a_folder.is_subfolder:
+                continue
             if a_folder_name not in folders_by_organisation_name[organisation_name].keys():
                 self._add_folder(organisation, a_folder)
             else: # if the folder exists
@@ -719,12 +730,44 @@ class GrafanaFolder(GrafanaConnection):
                 a_folder.folder_id = folders_by_organisation_name[organisation_name][a_folder.title].folder_id
                 self._update_folder(organisation, a_folder)
 
+        # sub folder - need to get all folder again to get the parent folder uid
+        for organisation_name, organisation in teamObj.organisations_by_organisation_name.items():
+            # Get all folders
+            folders_by_organisation_name[organisation_name] = teamObj._get_all_folders(organisation)
+
+        # set the parent uuid for subfolders
+        for a_folder_name, a_folder in valid_folders.items():
+            if not a_folder.is_subfolder:
+                continue
+            if a_folder.parent_folder_title in folders_by_organisation_name[organisation_name]:
+                a_folder.parent_folder_uid = folders_by_organisation_name[organisation_name][a_folder.parent_folder_title].uid
+            else:
+                log.warning('parent folder do not exist',
+                            extra={'organization': organisation_name, 'folder': a_folder.parent_folder_title})
+                continue
+
+        # create or update all subfolders
+        for a_folder_name, a_folder in valid_folders.items():
+            if not a_folder.is_subfolder:
+                continue
+            if a_folder_name not in folders_by_organisation_name[organisation_name].keys():
+                self._add_folder(organisation, a_folder)
+            else: # if the folder exists
+                a_folder.folder_uid = folders_by_organisation_name[organisation_name][a_folder.title].uid
+                a_folder.folder_id = folders_by_organisation_name[organisation_name][a_folder.title].folder_id
+                self._update_folder(organisation, a_folder)
         return
 
     def _add_folder(self, organisation: Organization, folder_new: Folder):
         # Create Folder
-        body = {'title': folder_new.title}
-        status, response = self._post_by_admin_using_org_id(f"api/folders", body=body, org_id=organisation.org_id)
+        if folder_new.is_subfolder:
+            body = {'title': folder_new.title, 'parentUid': folder_new.parent_folder_uid}
+        else:
+            body = {'title': folder_new.title}
+        status, response = self._post_by_admin_using_org_id(f"api/folders", body=body, org_id=organisation.org_id, valid_status=[200, 400])
+        if status == 400:
+            log.warning('folder create failed', extra={'organization': organisation.organisation_name, 'folder': folder_new.title})
+            return
         if response['uid']:
             _, folder_data = self._get_by_admin_using_org_id(f"api/folders/{response['uid']}", org_id=organisation.org_id)
             folder = folder_factory(folder_data)
@@ -1210,6 +1253,9 @@ def _dto_to_organisations(iam_organisations) -> Dict[str, Organization]:
         for folder_name, folder_dto in organisation_dto.folders.items():
             folder = Folder()
             folder.title = folder_dto.name
+            if folder_dto.parent:
+                folder.parent_folder_title = folder_dto.parent
+                folder.is_subfolder = True
             #folder.uid = folder_dto.uid
             for team in folder_dto.teams:
                 permission = PermissionTeam()

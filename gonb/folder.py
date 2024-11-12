@@ -88,6 +88,9 @@ class Folder:
         self.url: str = ''
         # key is uid
         self.permissions: List[Permission] = []
+        self.is_subfolder: bool = False
+        self.parent_folder_uid: str = None
+        self.parent_folder_title: str = None
 
     def formatted_permissions(self) -> List[Dict]:
         permission_list = []
@@ -109,4 +112,8 @@ def folder_factory(folder_data: Dict[str, Any]) -> Folder:
     if 'slug' in folder_data:
         folder.slug = folder_data['slug']
     folder.url = folder_data['url']
+    if 'folderUid' in folder_data:
+        folder.is_subfolder = True
+        folder.parent_folder_uid = folder_data['folderUid']
+        folder.parent_folder_title = folder_data['folderTitle']
     return folder
