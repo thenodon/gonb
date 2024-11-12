@@ -33,6 +33,7 @@ organization, team and user where teams and users are linked to an organization.
 for team is Editor. 
 - Team member lifecycle in the same way as for users in organization
 - Manage permission for user with Grafana Admin (instance admin) rights. Default is false.
+- Create folders and one level of subfolder. Top folders and subfolders can have different permissions for teams.
 
 # Argument passing
 The only way to pass arguments to gonb is by environment variables. Each provider must define their own and 
