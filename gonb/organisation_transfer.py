@@ -18,9 +18,11 @@ from typing import Dict, List
 class FolderDTO:
     def __init__(self, name):
         # Folder name
-        self.name = name
+        self.name: str = name
         self.teams: List[str] = []
-        self.team_permission = 2
+        self.team_permission: int = 2
+        # Folder name of parent
+        self.parent: str = None
 
 class UserDTO:
     def __init__(self, login_name: str):
