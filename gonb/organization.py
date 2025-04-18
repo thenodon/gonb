@@ -52,16 +52,17 @@ class DiffUsers:
             add_users.remove(self.exclude_user)
         return add_users
 
-    def delete(self, organisation_name: str) -> Set[str]:
+    def delete(self, organisation_name: str, delete_external_sso_users: bool = False) -> Set[str]:
         self._init(organisation_name=organisation_name)
         del_users = self.grafana_users_idx[organisation_name] - self.iam_users_idx[organisation_name]
         if self.exclude_user in del_users:
             del_users.remove(self.exclude_user)
         # Exclude users from grafana that have external auth
-        for user_name in del_users:
-            if self._grafana_orgs[organisation_name].users[user_name].external_auth:
+        for user_name in del_users.copy():
+            if self._grafana_orgs[organisation_name].users[user_name].external_auth and not delete_external_sso_users:
                 log.info("exclude delete of user due to external SSO", extra={'organization': organisation_name, 'user': user_name})
                 self._grafana_orgs[organisation_name].users.pop(user_name)
+                del_users.remove(user_name)
         return del_users
 
     def update(self, organisation_name: str) -> Set[str]:

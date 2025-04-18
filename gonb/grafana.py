@@ -43,6 +43,7 @@ GONB_GRAFANA_ADMINS = 'GONB_GRAFANA_ADMINS'
 GONB_SSO_PROVIDER = 'GONB_SSO_PROVIDER'
 GONB_GRAFANA_MAIN_ORG = 'GONB_GRAFANA_MAIN_ORG'
 GONB_GRAFANA_TEAM_FOLDER = 'GONB_GRAFANA_TEAM_FOLDER'
+GONB_GRAFANA_DELETE_EXTERNAL_AUTH_USERS = 'GONB_GRAFANA_DELETE_EXTERNAL_AUTH_USERS'
 
 MAIN_ORG = 'Main Org.'
 ADMIN = 'Admin'
@@ -575,12 +576,15 @@ class GrafanaUser(GrafanaConnection):
         # for organisation_name in set(source_users_idx.keys()).union(set(self.customer_users_idx.keys())):
         # Only manage users that is part of we got from the source
         users_managed = {}
+        # This enables that external auth users can be deleted - only use this if all users are provisioned from IAM
+        # and not automaticaly added in grafana
+        delete_external_auth_users = strtobool(os.getenv(GONB_GRAFANA_DELETE_EXTERNAL_AUTH_USERS, 'FALSE'))
         for organisation_name in set(iam_organisations.keys()):
             users_managed[organisation_name] = {}
             users_managed[organisation_name][UPDATED] = \
                 self._update_users(organisation_name, diff_users.update(organisation_name), iam_organisations)
             users_managed[organisation_name][REMOVED] = \
-                self._remove_users(organisation_name, diff_users.delete(organisation_name))
+                self._remove_users(organisation_name, diff_users.delete(organisation_name, delete_external_auth_users))
             users_managed[organisation_name][ADDED] = \
                 self._add_users(organisation_name, diff_users.add(organisation_name), iam_organisations)
 
