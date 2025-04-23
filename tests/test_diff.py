@@ -79,6 +79,55 @@ class DiffTest(unittest.TestCase):
         self.assertEqual(len(diff.add('foo_org')), 0)
         self.assertEqual(len(diff.delete('foo_org')), 1)
 
+    def test_diff_external_auth(self):
+        orgs_grafana: Dict[str, Organization] = {}
+        org = Organization(organisation_name='foo_org', org_id=100)
+        orgs_grafana[org.organisation_name] = org
+
+        orgs_iam: Dict[str, Organization] = {}
+        org = Organization(organisation_name='foo_org', org_id=None)
+        orgs_iam[org.organisation_name] = org
+
+        user = User(login_name="andy@foo.com")
+        user.name = "Andy Borg"
+        user.email = user.login
+        user.role = 'Viewer'
+        orgs_iam['foo_org'].users[user.login] = user
+
+        user = User(login_name="andy@foo.com")
+        user.name = "Andy Borg"
+        user.email = user.login
+        user.role = 'Viewer'
+        user.user_id = 200
+        orgs_grafana['foo_org'].users[user.login] = user
+
+        user = User(login_name="bull@foo.com")
+        user.name = "Bull Borg"
+        user.email = user.login
+        user.role = 'Viewer'
+        user.user_id = 201
+        user.external_auth = True
+        orgs_grafana['foo_org'].users[user.login] = user
+
+        # "Same" user in both orgs
+        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana, exclude_user="foobar_admin")
+        self.assertEqual(len(diff.update('foo_org')), 0)
+        self.assertEqual(len(diff.add('foo_org')), 0)
+        # External auth user is not deleted
+        self.assertEqual(len(diff.delete('foo_org')), 0)
+
+        # Need to add it again since it was pop'ed in the previous delete
+        user = User(login_name="bull@foo.com")
+        user.name = "Bull Borg"
+        user.email = user.login
+        user.role = 'Viewer'
+        user.user_id = 201
+        user.external_auth = True
+        orgs_grafana['foo_org'].users[user.login] = user
+        diff = DiffUsers(iam_orgs=orgs_iam, grafana_orgs=orgs_grafana, exclude_user="foobar_admin")
+        # External auth user is deleted
+        self.assertEqual(len(diff.delete('foo_org', True)), 1)
+
 
 if __name__ == '__main__':
     unittest.main()
