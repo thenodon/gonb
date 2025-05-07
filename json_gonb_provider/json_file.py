@@ -20,7 +20,7 @@ from typing import Dict
 
 from gonb.grafana import provision
 from gonb.provider import Provider, ProviderException
-from gonb.organisation_transfer import TeamDTO, UserDTO, OrganizationDTO
+from gonb.organisation_transfer import TeamDTO, UserDTO, OrganizationDTO, FolderDTO
 
 GONB_JSON_FILE = 'GONB_JSON_FILE'
 
@@ -74,6 +74,13 @@ class JSONFile(Provider):
                         user.email = user_data['email']
                         user.role = user_data['role']
                         org.users[user.login] = user
+                if 'folders' in org_data:
+                    for folder_data in org_data['folders']:
+                        folder = FolderDTO(name=folder_data['name'])
+                        folder.parent = folder_data['parent']
+                        folder.teams.append(folder_data['team'])
+                        org.folders[folder.parent + '/' + folder.name] = folder
+
         return orgs
 
 
