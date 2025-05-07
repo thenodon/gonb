@@ -116,4 +116,5 @@ def folder_factory(folder_data: Dict[str, Any]) -> Folder:
         folder.is_subfolder = True
         folder.parent_folder_uid = folder_data['folderUid']
         folder.parent_folder_title = folder_data['folderTitle']
+        folder.title = folder_data['folderTitle'] + "/" + folder_data['title']
     return folder

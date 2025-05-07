@@ -201,7 +201,7 @@ class GrafanaAPI:
                 if r.status_code == 403:
                     if "externallySynced" in r.text:
                         log.info('grafana api failed status', extra={'method': 'PATCH', 'url': url, 'status': r.status_code,
-                                                              'error': r.text})
+                                                                     'error': r.text})
                         return r.status_code, r.json()
                 log.error('grafana api failed status', extra={'method': 'PATCH', 'url': url, 'status': r.status_code,
                                                               'error': r.text})
@@ -688,7 +688,11 @@ class GrafanaFolder(GrafanaConnection):
             teamObj._get_all_teams(organisation, folders_by_organisation_name[organisation_name])
 
         # For all organisations create and/or update folders
+        valid_folders = {}
         for organisation_name, organisation in teamObj.organisations_by_organisation_name.items():
+            # Check if the organisation is part of the iam_organisations
+            if organisation_name not in iam_organisations:
+                continue
             # All existing teams for organization
             _, teams_data = self._get_by_api_key(f"api/teams/search", api_key=organisation.api_key)
             if 'teams' not in teams_data:
@@ -700,11 +704,10 @@ class GrafanaFolder(GrafanaConnection):
                 team_uid[team_data['name']] = team_data['id']
 
             # Get all folders that should be configured
-            valid_folders = {}
             for a_folder_name, a_folder in iam_organisations[organisation_name].folders.items():
                 # For all folders to manage check if the team exists i Grafana - if not skip
                 folder = Folder()
-                folder.title = a_folder_name
+                folder.title = a_folder.title
                 if a_folder.is_subfolder:
                     folder.is_subfolder = a_folder.is_subfolder
                     folder.parent_folder_title = a_folder.parent_folder_title
@@ -735,9 +738,9 @@ class GrafanaFolder(GrafanaConnection):
                 self._update_folder(organisation, a_folder)
 
         # sub folder - need to get all folder again to get the parent folder uid
-        for organisation_name, organisation in teamObj.organisations_by_organisation_name.items():
+        #for organisation_name, organisation in teamObj.organisations_by_organisation_name.items():
             # Get all folders
-            folders_by_organisation_name[organisation_name] = teamObj._get_all_folders(organisation)
+        #    folders_by_organisation_name[organisation_name] = teamObj._get_all_folders(organisation)
 
         # set the parent uuid for subfolders
         for a_folder_name, a_folder in valid_folders.items():
@@ -757,8 +760,8 @@ class GrafanaFolder(GrafanaConnection):
             if a_folder_name not in folders_by_organisation_name[organisation_name].keys():
                 self._add_folder(organisation, a_folder)
             else: # if the folder exists
-                a_folder.folder_uid = folders_by_organisation_name[organisation_name][a_folder.title].uid
-                a_folder.folder_id = folders_by_organisation_name[organisation_name][a_folder.title].folder_id
+                a_folder.folder_uid = folders_by_organisation_name[organisation_name][a_folder_name].uid
+                a_folder.folder_id = folders_by_organisation_name[organisation_name][a_folder_name].folder_id
                 self._update_folder(organisation, a_folder)
         return
 
@@ -789,7 +792,7 @@ class GrafanaFolder(GrafanaConnection):
             body = {'items': folder.formatted_permissions()}
             self._post_by_admin_using_org_id(f"api/folders/{folder.uid}/permissions", body=body, org_id=organisation.org_id)
             log.info('folder add', extra={'organization': organisation.organisation_name,
-                                               'folder': folder.title})
+                                          'folder': folder.title})
 
 
     def _update_folder(self, organisation: Organization, update_folder: Folder):
@@ -821,7 +824,7 @@ class GrafanaFolder(GrafanaConnection):
             body = {'items': dummy_folder.formatted_permissions()}
             self._post_by_admin_using_org_id(f"api/folders/{update_folder.folder_uid}/permissions", body=body, org_id=organisation.org_id)
             log.info('folder updated permission', extra={'organization': organisation.organisation_name,
-                                                              'folder': update_folder.title})
+                                                         'folder': update_folder.title})
 
 class GrafanaTeam(GrafanaConnection):
     def __init__(self):
@@ -1109,6 +1112,9 @@ class GrafanaTeam(GrafanaConnection):
 
         for folder in folders_by_uid.values():
             if folder.title not in folders_by_title:
+            #    if folder.is_subfolder:
+            ##        folders_by_title[folder.parent_folder_title +"/" + folder.title] = folder
+            #    else:
                 folders_by_title[folder.title] = folder
             else:
                 raise GrafanaException(f"Folder title already exists {folder.title}")
@@ -1239,6 +1245,6 @@ def _dto_to_organisations(iam_organisations) -> Dict[str, Organization]:
                 permission.permission = folder_dto.team_permission
                 folder.permissions.append(permission)
 
-            organisation.folders[folder.title] = folder
+            organisation.folders[folder_name] = folder
 
     return organisations
