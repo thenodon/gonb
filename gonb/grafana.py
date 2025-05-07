@@ -1095,7 +1095,7 @@ class GrafanaTeam(GrafanaConnection):
         folders_by_uid: Dict[str, Folder] = {}
         folders_by_title: Dict[str, Folder] = {}
         # Search in top folder
-        _, folders_data = self._get_by_api_key('api/search?folderIds=0&type=dash-folder', api_key=organisation.api_key)
+        _, folders_data = self._get_by_api_key('api/search?type=dash-folder', api_key=organisation.api_key)
         for folder_data in folders_data:
             folder = folder_factory(folder_data)
             _, permissions_data = self._get_by_api_key(f"api/folders/{folder.uid}/permissions",
@@ -1105,34 +1105,6 @@ class GrafanaTeam(GrafanaConnection):
                 folder.permissions.append(permission)
 
             organisation.folders[folder.title] = folder
-            folders_by_uid[folder.uid] = folder
-
-        for folder in folders_by_uid.values():
-            if folder.title not in folders_by_title:
-                folders_by_title[folder.title] = folder
-            else:
-                raise GrafanaException(f"Folder title already exists {folder.title}")
-
-        return folders_by_title
-
-    def _get_all_folders_OLD(self, organisation: Organization) -> Dict[str, Folder]:
-        """
-        Get all existing folders related to an organisation.
-        :param organisation:
-        :return:
-        """
-        folders_by_uid: Dict[str, Folder] = {}
-        folders_by_title: Dict[str, Folder] = {}
-        # Search in top folder
-        _, folders_data = self._get_by_api_key('api/search?folderIds=0&type=dash-folder', api_key=organisation.api_key)
-        for folder_data in folders_data:
-            folder = folder_factory(folder_data)
-            _, permissions_data = self._get_by_api_key(f"api/folders/{folder.uid}/permissions",
-                                                       api_key=organisation.api_key)
-            for permission_data in permissions_data:
-                permission = permission_factory(permission_data)
-                folder.permissions.append(permission)
-
             folders_by_uid[folder.uid] = folder
 
         for folder in folders_by_uid.values():
